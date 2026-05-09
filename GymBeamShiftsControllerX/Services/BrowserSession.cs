@@ -27,10 +27,18 @@ namespace GymBeamShiftsControllerX.Services
                 options.BinaryLocation = chromeBinary;
             }
 
-            if (_config.Browser.Headless)
+            bool runningInContainer = string.Equals(
+                Environment.GetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER"),
+                "true",
+                StringComparison.OrdinalIgnoreCase);
+
+            bool useHeadless = _config.Browser.Headless || runningInContainer;
+            if (useHeadless)
             {
                 options.AddArgument("--headless=new");
             }
+
+            Logger.Log($"Chrome start mode: {(useHeadless ? "headless" : "headed")}");
 
             options.AddArgument($"--window-size={_config.Browser.WindowSize}");
 
@@ -43,6 +51,9 @@ namespace GymBeamShiftsControllerX.Services
             options.AddArgument("--no-sandbox");
             options.AddArgument("--disable-dev-shm-usage");
             options.AddArgument("--disable-software-rasterizer");
+            options.AddArgument("--disable-extensions");
+            options.AddArgument("--disable-background-networking");
+            options.AddArgument("--remote-debugging-port=9222");
 
             var service = ChromeDriverService.CreateDefaultService();
             service.HideCommandPromptWindow = true;

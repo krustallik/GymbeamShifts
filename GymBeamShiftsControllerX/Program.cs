@@ -47,7 +47,10 @@ namespace GymBeamShiftsControllerX
             catch (Exception ex)
             {
                 Logger.Log($"Admin Web failed to start: {ex.Message}");
+                Console.WriteLine($"Admin Web failed to start: {ex.Message}");
             }
+
+            SendStartupNotification(config, startTime);
 
             browserSession.InitializeDriver();
 
@@ -123,6 +126,28 @@ namespace GymBeamShiftsControllerX
         private static string FormatUptime(TimeSpan uptime)
         {
             return $"{uptime.Days}d {uptime.Hours}h {uptime.Minutes}m";
+        }
+
+        private static void SendStartupNotification(AppConfig config, DateTime startTime)
+        {
+            string host = Environment.GetEnvironmentVariable("HOSTNAME")
+                ?? Environment.MachineName;
+            bool inContainer = string.Equals(
+                Environment.GetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER"),
+                "true",
+                StringComparison.OrdinalIgnoreCase);
+
+            string message =
+                "STARTUP OK\n" +
+                $"Time: {startTime:yyyy-MM-dd HH:mm:ss}\n" +
+                $"Host: {host}\n" +
+                $"Container: {inContainer}\n" +
+                $"Admin port: {Environment.GetEnvironmentVariable("GYMBEAM_ADMIN_PORT") ?? "8080"}";
+
+            if (TrySendTelegram(config, message))
+            {
+                Logger.Log("Отправлено стартовое сообщение в Telegram.");
+            }
         }
 
         private static void TrySendDailyStatus(AppConfig config, DateTime startTime)

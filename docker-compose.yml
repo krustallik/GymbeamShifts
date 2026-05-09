@@ -8,14 +8,15 @@ services:
     env_file:
       - ./GymBeamShiftsControllerX/.env
     environment:
-      GYMBEAM_ADMIN_HOST: "0.0.0.0"
+      GYMBEAM_ADMIN_HOST: "*"
       GYMBEAM_ADMIN_PORT: "8080"
       CHROME_BIN: /usr/bin/chromium
+      GYMBEAM_LOG_PATH: /app/runtime-data/app.log
     expose:
       - "8080"
     volumes:
       - ./GymBeamShiftsControllerX/appconfig.json:/app/appconfig.json
-      - ./runtime-data/log.txt:/app/log.txt
+      - ./runtime-data:/app/runtime-data
     mem_limit: 512m
 
   nginx:
