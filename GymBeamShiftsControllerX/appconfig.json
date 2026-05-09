@@ -1,4 +1,4 @@
-﻿{
+{
   "Auth": {
     "LoginUrl": "https://part-time.gymbeam.com/web/login",
     "Login": "${GYMBEAM_AUTH_LOGIN}",
@@ -15,16 +15,12 @@
     "DisableGpu": true
   },
   "Timing": {
-    "CheckIntervalMinutes": 2,
+    "CheckIntervalMinutes": 1,
     "ShiftMinHoursAhead": 48,
     "DriverRestartAfterIterations": 100,
     "TelegramDelayMilliseconds": 1000
   },
   "ShiftRules": {
-    "IncludedWeekdays": [
-      "Monday",
-      "Friday"
-    ],
     "StartTimesToSkip": [
       "22:00",
       "21:45"
@@ -48,11 +44,11 @@
     "ExcludedDates": [
       "2025-10-27",
       "2025-11-01",
-      "2025-10-29",
-      "2025-12-10",
-      "2026-02-10",
-      "2026-03-16",
-      "2026-03-13"
+      "2025-10-29"
+    ],
+    "IncludedWeekdays": [
+      "Monday",
+      "Friday"
     ]
   }
 }

@@ -40,6 +40,10 @@ namespace GymBeamShiftsControllerX.Services
         {
             PropertyNamingPolicy = JsonNamingPolicy.CamelCase
         };
+        private static readonly JsonSerializerOptions RequestJsonOptions = new JsonSerializerOptions
+        {
+            PropertyNameCaseInsensitive = true
+        };
         private readonly HttpListener _listener = new HttpListener();
         private readonly AppConfig _config;
         private readonly ShiftRulesStore _shiftRulesStore;
@@ -191,7 +195,7 @@ namespace GymBeamShiftsControllerX.Services
             }
 
             var body = ReadRequestBody(context.Request);
-            var payload = JsonSerializer.Deserialize<Dictionary<string, string>>(body);
+            var payload = JsonSerializer.Deserialize<Dictionary<string, string>>(body, RequestJsonOptions);
             if (payload == null)
             {
                 WriteJson(context.Response, 400, new { error = "Invalid payload" });
@@ -259,7 +263,7 @@ namespace GymBeamShiftsControllerX.Services
             try
             {
                 var body = ReadRequestBody(context.Request);
-                var update = JsonSerializer.Deserialize<ShiftRulesUpdateRequest>(body);
+                var update = JsonSerializer.Deserialize<ShiftRulesUpdateRequest>(body, RequestJsonOptions);
                 if (update == null)
                 {
                     WriteJson(context.Response, 400, new { error = "Invalid payload" });
