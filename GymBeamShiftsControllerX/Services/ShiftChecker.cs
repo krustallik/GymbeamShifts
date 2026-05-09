@@ -13,11 +13,13 @@ namespace GymBeamShiftsControllerX.Services
     {
         private readonly BrowserSession _browserSession;
         private readonly AppConfig _config;
+        private readonly ShiftRulesStore _shiftRulesStore;
 
-        public ShiftChecker(BrowserSession browserSession, AppConfig config)
+        public ShiftChecker(BrowserSession browserSession, AppConfig config, ShiftRulesStore shiftRulesStore)
         {
             _browserSession = browserSession;
             _config = config;
+            _shiftRulesStore = shiftRulesStore;
         }
 
         public void CheckForShifts()
@@ -114,10 +116,11 @@ namespace GymBeamShiftsControllerX.Services
                 });
             }
 
-            var holidays = ParseDateSet(_config.ShiftRules.Holidays);
-            var excludedDates = ParseDateSet(_config.ShiftRules.ExcludedDates);
-            var startTimesToSkip = _config.ShiftRules.StartTimesToSkip ?? new List<string>();
-            var includedWeekdays = ParseWeekdaySet(_config.ShiftRules.IncludedWeekdays);
+            var rules = _shiftRulesStore.GetSnapshot();
+            var holidays = ParseDateSet(rules.Holidays);
+            var excludedDates = ParseDateSet(rules.ExcludedDates);
+            var startTimesToSkip = rules.StartTimesToSkip ?? new List<string>();
+            var includedWeekdays = ParseWeekdaySet(rules.IncludedWeekdays);
 
             foreach (var shift in shiftList)
             {

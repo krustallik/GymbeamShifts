@@ -37,8 +37,9 @@ namespace GymBeamShiftsControllerX
             }
 
             var browserSession = new BrowserSession(config);
-            var shiftChecker = new ShiftChecker(browserSession, config);
-            var adminWeb = new AdminWebServer(config, () => CreateStatusSnapshot(startTime, config));
+            var shiftRulesStore = new ShiftRulesStore(config.ShiftRules);
+            var shiftChecker = new ShiftChecker(browserSession, config, shiftRulesStore);
+            var adminWeb = new AdminWebServer(config, shiftRulesStore, () => CreateStatusSnapshot(startTime, config));
             try
             {
                 adminWeb.Start();

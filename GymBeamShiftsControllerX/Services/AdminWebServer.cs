@@ -42,15 +42,16 @@ namespace GymBeamShiftsControllerX.Services
         };
         private readonly HttpListener _listener = new HttpListener();
         private readonly AppConfig _config;
+        private readonly ShiftRulesStore _shiftRulesStore;
         private readonly Func<BotStatusSnapshot> _statusProvider;
-        private readonly object _configLock = new object();
         private readonly object _loginAttemptsLock = new object();
         private readonly Dictionary<string, List<DateTime>> _loginAttemptsByIp = new Dictionary<string, List<DateTime>>();
         private Thread? _serverThread;
 
-        public AdminWebServer(AppConfig config, Func<BotStatusSnapshot> statusProvider)
+        public AdminWebServer(AppConfig config, ShiftRulesStore shiftRulesStore, Func<BotStatusSnapshot> statusProvider)
         {
             _config = config;
+            _shiftRulesStore = shiftRulesStore;
             _statusProvider = statusProvider;
         }
 
@@ -81,6 +82,24 @@ namespace GymBeamShiftsControllerX.Services
             _serverThread.Start();
 
             Logger.Log($"Admin Web started on {prefix}");
+        }
+
+        public void Stop()
+        {
+            if (!_listener.IsListening)
+            {
+                return;
+            }
+
+            try
+            {
+                _listener.Stop();
+                _listener.Close();
+            }
+            catch (Exception ex)
+            {
+                Logger.Log($"Admin Web stop error: {ex.Message}");
+            }
         }
 
         private void ServerLoop()
@@ -141,11 +160,7 @@ namespace GymBeamShiftsControllerX.Services
 
             if (method == "GET" && path == "/api/shift-rules")
             {
-                lock (_configLock)
-                {
-                    WriteJson(context.Response, 200, _config.ShiftRules);
-                }
-
+                WriteJson(context.Response, 200, _shiftRulesStore.GetSnapshot());
                 return;
             }
 
@@ -251,14 +266,9 @@ namespace GymBeamShiftsControllerX.Services
                     return;
                 }
 
-                lock (_configLock)
-                {
-                    _config.ShiftRules.IncludedWeekdays = CleanList(update.IncludedWeekdays);
-                    _config.ShiftRules.StartTimesToSkip = CleanList(update.StartTimesToSkip);
-                    _config.ShiftRules.Holidays = CleanList(update.Holidays);
-                    _config.ShiftRules.ExcludedDates = CleanList(update.ExcludedDates);
-                    ConfigurationLoader.Save(AppConstants.ConfigFileName, _config);
-                }
+                var updatedRules = _shiftRulesStore.Update(update);
+                _config.ShiftRules = updatedRules;
+                ConfigurationLoader.SaveShiftRules(AppConstants.ConfigFileName, updatedRules);
 
                 Logger.Log("ShiftRules updated from admin API.");
                 WriteJson(context.Response, 200, new { ok = true });
@@ -268,20 +278,6 @@ namespace GymBeamShiftsControllerX.Services
                 Logger.Log($"ShiftRules update failed: {ex.Message}");
                 WriteJson(context.Response, 500, new { error = "Failed to update ShiftRules" });
             }
-        }
-
-        private static List<string> CleanList(List<string> source)
-        {
-            if (source == null)
-            {
-                return new List<string>();
-            }
-
-            return source
-                .Where(value => !string.IsNullOrWhiteSpace(value))
-                .Select(value => value.Trim())
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .ToList();
         }
 
         private bool IsAuthenticated(HttpListenerRequest request)

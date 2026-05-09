@@ -21,6 +21,11 @@ namespace GymBeamShiftsControllerX.Services
         public void InitializeDriver()
         {
             var options = new ChromeOptions();
+            string chromeBinary = Environment.GetEnvironmentVariable("CHROME_BIN") ?? string.Empty;
+            if (!string.IsNullOrWhiteSpace(chromeBinary))
+            {
+                options.BinaryLocation = chromeBinary;
+            }
 
             if (_config.Browser.Headless)
             {
@@ -33,6 +38,11 @@ namespace GymBeamShiftsControllerX.Services
             {
                 options.AddArgument("--disable-gpu");
             }
+
+            // Required for stable Chrome execution in Linux containers.
+            options.AddArgument("--no-sandbox");
+            options.AddArgument("--disable-dev-shm-usage");
+            options.AddArgument("--disable-software-rasterizer");
 
             var service = ChromeDriverService.CreateDefaultService();
             service.HideCommandPromptWindow = true;

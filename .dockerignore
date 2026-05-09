@@ -1,0 +1,8 @@
+.git
+.gitignore
+**/bin
+**/obj
+**/.vs
+**/.idea
+**/.env
+runtime-data

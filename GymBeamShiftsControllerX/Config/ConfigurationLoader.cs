@@ -41,6 +41,18 @@ namespace GymBeamShiftsControllerX.Config
             File.WriteAllText(configPath, json);
         }
 
+        public static void SaveShiftRules(string fileName, ShiftRulesSettings shiftRules)
+        {
+            string configPath = FindConfigPath(fileName);
+            string json = File.ReadAllText(configPath);
+            AppConfig fileConfig = JsonSerializer.Deserialize<AppConfig>(json, SerializerOptions)
+                ?? throw new InvalidOperationException("Файл конфигурации пустой или поврежден.");
+
+            fileConfig.ShiftRules = shiftRules ?? new ShiftRulesSettings();
+            string updatedJson = JsonSerializer.Serialize(fileConfig, SerializerOptions);
+            File.WriteAllText(configPath, updatedJson);
+        }
+
         private static void LoadDotEnvIfExists()
         {
             string? envPath = FindOptionalFilePath(".env");

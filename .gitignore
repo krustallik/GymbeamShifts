@@ -11,3 +11,5 @@ packages/
 .env
 **/.env
 GymBeamShiftsControllerX/appconfig.local.json
+runtime-data/
+nginx/.htpasswd
