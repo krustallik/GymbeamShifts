@@ -1,0 +1,12 @@
+bin/
+obj/
+.vs/
+.idea/
+packages/
+*.user
+*.suo
+*.userprefs
+*.log
+*.tmp
+.env
+GymBeamShiftsControllerX/appconfig.local.json

@@ -1,0 +1,54 @@
+﻿{
+  "Auth": {
+    "LoginUrl": "https://part-time.gymbeam.com/web/login",
+    "Login": "${GYMBEAM_AUTH_LOGIN}",
+    "Password": "${GYMBEAM_AUTH_PASSWORD}",
+    "SuccessUrlContains": "/news"
+  },
+  "Telegram": {
+    "BotToken": "${GYMBEAM_TELEGRAM_BOT_TOKEN}",
+    "ChatId": "${GYMBEAM_TELEGRAM_CHAT_ID}"
+  },
+  "Browser": {
+    "Headless": false,
+    "WindowSize": "1920,1080",
+    "DisableGpu": true
+  },
+  "Timing": {
+    "CheckIntervalMinutes": 2,
+    "ShiftMinHoursAhead": 48,
+    "DriverRestartAfterIterations": 100,
+    "TelegramDelayMilliseconds": 1000
+  },
+  "ShiftRules": {
+    "StartTimesToSkip": [
+      "22:00",
+      "21:45"
+    ],
+    "Holidays": [
+      "2026-04-03",
+      "2026-04-06",
+      "2026-05-01",
+      "2026-05-08",
+      "2026-07-05",
+      "2026-08-29",
+      "2026-09-01",
+      "2026-09-15",
+      "2026-11-01",
+      "2026-11-17",
+      "2026-12-24",
+      "2026-12-25",
+      "2026-12-26",
+      "2026-01-29"
+    ],
+    "ExcludedDates": [
+      "2025-10-27",
+      "2025-11-01",
+      "2025-10-29",
+      "2025-12-10",
+      "2026-02-10",
+      "2026-03-16",
+      "2026-03-13"
+    ]
+  }
+}
