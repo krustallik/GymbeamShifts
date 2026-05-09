@@ -8,19 +8,19 @@ namespace GymBeamShiftsControllerX.Config
 {
     public static class ConfigurationLoader
     {
+        private static readonly JsonSerializerOptions SerializerOptions = new JsonSerializerOptions
+        {
+            PropertyNameCaseInsensitive = true,
+            WriteIndented = true
+        };
+
         public static AppConfig Load(string fileName)
         {
             LoadDotEnvIfExists();
 
             string configPath = FindConfigPath(fileName);
             string json = File.ReadAllText(configPath);
-
-            var options = new JsonSerializerOptions
-            {
-                PropertyNameCaseInsensitive = true
-            };
-
-            AppConfig config = JsonSerializer.Deserialize<AppConfig>(json, options);
+            AppConfig config = JsonSerializer.Deserialize<AppConfig>(json, SerializerOptions);
 
             if (config == null)
             {
@@ -32,6 +32,13 @@ namespace GymBeamShiftsControllerX.Config
             ValidateRequiredSecrets(config);
 
             return config;
+        }
+
+        public static void Save(string fileName, AppConfig config)
+        {
+            string configPath = FindConfigPath(fileName);
+            string json = JsonSerializer.Serialize(config, SerializerOptions);
+            File.WriteAllText(configPath, json);
         }
 
         private static void LoadDotEnvIfExists()

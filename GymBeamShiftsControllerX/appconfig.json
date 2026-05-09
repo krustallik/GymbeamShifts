@@ -21,6 +21,10 @@
     "TelegramDelayMilliseconds": 1000
   },
   "ShiftRules": {
+    "IncludedWeekdays": [
+      "Monday",
+      "Friday"
+    ],
     "StartTimesToSkip": [
       "22:00",
       "21:45"

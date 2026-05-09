@@ -9,4 +9,5 @@ packages/
 *.log
 *.tmp
 .env
+**/.env
 GymBeamShiftsControllerX/appconfig.local.json

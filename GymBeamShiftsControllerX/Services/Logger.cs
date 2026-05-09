@@ -8,6 +8,11 @@ namespace GymBeamShiftsControllerX.Services
         private static readonly object LockObject = new object();
         private static readonly string LogFilePath = Path.Combine(AppContext.BaseDirectory, AppConstants.LogFileName);
 
+        public static string GetLogFilePath()
+        {
+            return LogFilePath;
+        }
+
         public static void Log(string message)
         {
             lock (LockObject)

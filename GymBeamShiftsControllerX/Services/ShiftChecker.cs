@@ -117,6 +117,7 @@ namespace GymBeamShiftsControllerX.Services
             var holidays = ParseDateSet(_config.ShiftRules.Holidays);
             var excludedDates = ParseDateSet(_config.ShiftRules.ExcludedDates);
             var startTimesToSkip = _config.ShiftRules.StartTimesToSkip ?? new List<string>();
+            var includedWeekdays = ParseWeekdaySet(_config.ShiftRules.IncludedWeekdays);
 
             foreach (var shift in shiftList)
             {
@@ -132,11 +133,7 @@ namespace GymBeamShiftsControllerX.Services
 
                 DayOfWeek dow = shift.Date.DayOfWeek;
                 bool isWeekend = (dow == DayOfWeek.Saturday || dow == DayOfWeek.Sunday);
-                bool isMonday = (dow == DayOfWeek.Monday);
-                bool isTuesday = (dow == DayOfWeek.Tuesday);
-                bool isWednesday = (dow == DayOfWeek.Wednesday);
-                bool isThursday = (dow == DayOfWeek.Thursday);
-                bool isFriday = (dow == DayOfWeek.Friday);
+                bool isIncludedWeekday = includedWeekdays.Contains(dow);
 
                 bool isHoliday = holidays.Contains(shift.Date.Date);
 
@@ -166,7 +163,7 @@ namespace GymBeamShiftsControllerX.Services
                 if (
                     //(shift.UserId == "Lukáš Fialek" || shift.UserId == "Andrea Pavlíková" || shift.UserId == "Marián Sipko"
                     //||
-                    (isWeekend || isHoliday || isMonday || isFriday) &&
+                    (isWeekend || isHoliday || isIncludedWeekday) &&
                     shift.ButtonElement != null
                 )
                 {
@@ -239,6 +236,25 @@ namespace GymBeamShiftsControllerX.Services
                         out var parsedDate))
                 {
                     result.Add(parsedDate.Date);
+                }
+            }
+
+            return result;
+        }
+
+        private static HashSet<DayOfWeek> ParseWeekdaySet(List<string> weekdays)
+        {
+            var result = new HashSet<DayOfWeek>();
+            if (weekdays == null)
+            {
+                return result;
+            }
+
+            foreach (var day in weekdays)
+            {
+                if (Enum.TryParse(day, true, out DayOfWeek parsedDay))
+                {
+                    result.Add(parsedDay);
                 }
             }
 
