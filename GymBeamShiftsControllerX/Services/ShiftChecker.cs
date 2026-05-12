@@ -25,7 +25,7 @@ namespace GymBeamShiftsControllerX.Services
         public void CheckForShifts()
         {
             var driver = _browserSession.Driver;
-            var wait = new WebDriverWait(driver, TimeSpan.FromSeconds(30));
+            var wait = new WebDriverWait(driver, TimeSpan.FromSeconds(60));
 
             driver.Navigate().Refresh();
             Logger.Log("Страница обновлена.");
