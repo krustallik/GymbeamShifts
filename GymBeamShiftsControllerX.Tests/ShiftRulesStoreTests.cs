@@ -117,4 +117,59 @@ public class ShiftRulesStoreTests
         }
     }
 
+    [Fact]
+    public void SaveShiftMinHoursAhead_UpdatesOnlyTimingFieldAndKeepsOtherSections()
+    {
+        string fileName = $"appconfig.test.{Guid.NewGuid():N}.json";
+        string path = System.IO.Path.Combine(TestPathHelper.GetWorkspaceRoot(), fileName);
+
+        try
+        {
+            string initialJson = """
+{
+  "Auth": {
+    "LoginUrl": "https://part-time.gymbeam.com/web/login",
+    "Login": "${GYMBEAM_AUTH_LOGIN}",
+    "Password": "${GYMBEAM_AUTH_PASSWORD}",
+    "SuccessUrlContains": "/news"
+  },
+  "Telegram": {
+    "BotToken": "${GYMBEAM_TELEGRAM_BOT_TOKEN}",
+    "ChatId": "${GYMBEAM_TELEGRAM_CHAT_ID}"
+  },
+  "Timing": {
+    "CheckIntervalMinutes": 2,
+    "ShiftMinHoursAhead": 48,
+    "DriverRestartAfterIterations": 100,
+    "TelegramDelayMilliseconds": 1000
+  },
+  "ShiftRules": {
+    "IncludedWeekdays": [ "Monday" ],
+    "StartTimesToSkip": [ "22:00" ],
+    "Holidays": [],
+    "ExcludedDates": []
+  }
+}
+""";
+            System.IO.File.WriteAllText(path, initialJson);
+
+            ConfigurationLoader.SaveShiftMinHoursAhead(fileName, 72);
+
+            string updated = System.IO.File.ReadAllText(path);
+
+            Assert.Contains("\"ShiftMinHoursAhead\": 72", updated);
+            Assert.Contains("\"CheckIntervalMinutes\": 2", updated);
+            Assert.Contains("\"IncludedWeekdays\": [", updated);
+            Assert.Contains("\"Monday\"", updated);
+            Assert.Contains("\"Login\": \"${GYMBEAM_AUTH_LOGIN}\"", updated);
+        }
+        finally
+        {
+            if (System.IO.File.Exists(path))
+            {
+                System.IO.File.Delete(path);
+            }
+        }
+    }
+
 }

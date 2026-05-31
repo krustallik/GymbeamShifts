@@ -53,6 +53,19 @@ namespace GymBeamShiftsControllerX.Config
             File.WriteAllText(configPath, updatedJson);
         }
 
+        public static void SaveShiftMinHoursAhead(string fileName, int shiftMinHoursAhead)
+        {
+            string configPath = FindConfigPath(fileName);
+            string json = File.ReadAllText(configPath);
+            AppConfig fileConfig = JsonSerializer.Deserialize<AppConfig>(json, SerializerOptions)
+                ?? throw new InvalidOperationException("Файл конфигурации пустой или поврежден.");
+
+            fileConfig.Timing ??= new TimingSettings();
+            fileConfig.Timing.ShiftMinHoursAhead = shiftMinHoursAhead;
+            string updatedJson = JsonSerializer.Serialize(fileConfig, SerializerOptions);
+            File.WriteAllText(configPath, updatedJson);
+        }
+
         private static void LoadDotEnvIfExists()
         {
             string? envPath = FindOptionalFilePath(".env");

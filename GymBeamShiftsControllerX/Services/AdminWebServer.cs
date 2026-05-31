@@ -29,6 +29,16 @@ namespace GymBeamShiftsControllerX.Services
         public List<string> StartTimesToSkip { get; set; } = new List<string>();
         public List<string> Holidays { get; set; } = new List<string>();
         public List<string> ExcludedDates { get; set; } = new List<string>();
+        public int ShiftMinHoursAhead { get; set; } = 48;
+    }
+
+    public class ShiftRulesApiResponse
+    {
+        public List<string> IncludedWeekdays { get; set; } = new List<string>();
+        public List<string> StartTimesToSkip { get; set; } = new List<string>();
+        public List<string> Holidays { get; set; } = new List<string>();
+        public List<string> ExcludedDates { get; set; } = new List<string>();
+        public int ShiftMinHoursAhead { get; set; }
     }
 
     public class AdminWebServer
@@ -164,7 +174,7 @@ namespace GymBeamShiftsControllerX.Services
 
             if (method == "GET" && path == "/api/shift-rules")
             {
-                WriteJson(context.Response, 200, _shiftRulesStore.GetSnapshot());
+                WriteJson(context.Response, 200, BuildShiftRulesApiResponse());
                 return;
             }
 
@@ -270,9 +280,12 @@ namespace GymBeamShiftsControllerX.Services
                     return;
                 }
 
+                int shiftMinHoursAhead = NormalizeShiftMinHoursAhead(update.ShiftMinHoursAhead);
                 var updatedRules = _shiftRulesStore.Update(update);
                 _config.ShiftRules = updatedRules;
+                _config.Timing.ShiftMinHoursAhead = shiftMinHoursAhead;
                 ConfigurationLoader.SaveShiftRules(AppConstants.ConfigFileName, updatedRules);
+                ConfigurationLoader.SaveShiftMinHoursAhead(AppConstants.ConfigFileName, shiftMinHoursAhead);
 
                 Logger.Log("ShiftRules updated from admin API.");
                 WriteJson(context.Response, 200, new { ok = true });
@@ -340,6 +353,24 @@ namespace GymBeamShiftsControllerX.Services
             response.ContentLength64 = data.Length;
             response.OutputStream.Write(data, 0, data.Length);
             response.Close();
+        }
+
+        private ShiftRulesApiResponse BuildShiftRulesApiResponse()
+        {
+            var rules = _shiftRulesStore.GetSnapshot();
+            return new ShiftRulesApiResponse
+            {
+                IncludedWeekdays = rules.IncludedWeekdays,
+                StartTimesToSkip = rules.StartTimesToSkip,
+                Holidays = rules.Holidays,
+                ExcludedDates = rules.ExcludedDates,
+                ShiftMinHoursAhead = _config.Timing.ShiftMinHoursAhead
+            };
+        }
+
+        private static int NormalizeShiftMinHoursAhead(int value)
+        {
+            return Math.Min(Math.Max(value, 1), 720);
         }
 
         private static int ParseIntOrDefault(string? value, int fallback)
@@ -543,6 +574,8 @@ namespace GymBeamShiftsControllerX.Services
 
       <div class='card'>
         <h2>Shift Rules</h2>
+        <label>ShiftMinHoursAhead (годин до початку зміни)</label>
+        <input id='shiftMinHoursAhead' type='number' min='1' max='720' step='1' />
         <div class='grid'>
           <div>
             <label>IncludedWeekdays (one per line)</label>
@@ -615,6 +648,7 @@ namespace GymBeamShiftsControllerX.Services
 
     async function loadRules() {
       const rules = await api('/api/shift-rules');
+      document.getElementById('shiftMinHoursAhead').value = rules.shiftMinHoursAhead ?? 48;
       document.getElementById('includedWeekdays').value = arrayToLines(rules.includedWeekdays);
       document.getElementById('startTimesToSkip').value = arrayToLines(rules.startTimesToSkip);
       document.getElementById('holidays').value = arrayToLines(rules.holidays);
@@ -623,6 +657,7 @@ namespace GymBeamShiftsControllerX.Services
 
     async function saveRules() {
       const payload = {
+        shiftMinHoursAhead: Number(document.getElementById('shiftMinHoursAhead').value),
         includedWeekdays: linesToArray(document.getElementById('includedWeekdays').value),
         startTimesToSkip: linesToArray(document.getElementById('startTimesToSkip').value),
         holidays: linesToArray(document.getElementById('holidays').value),
