@@ -5,10 +5,15 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
 BRANCH="${DEPLOY_BRANCH:-main}"
+CONFIG_PATH="GymBeamShiftsControllerX/appconfig.json"
 
 echo "Deploying branch: ${BRANCH}"
 git fetch origin "${BRANCH}"
 git checkout "${BRANCH}"
+# Always discard server-local app config and use GitHub version.
+if [[ -f "${CONFIG_PATH}" ]]; then
+  git checkout -- "${CONFIG_PATH}"
+fi
 git pull --ff-only origin "${BRANCH}"
 
 mkdir -p runtime-data

@@ -58,15 +58,15 @@ git push origin main
 **На ПК** (PowerShell або Git Bash):
 
 ```powershell
-ssh-keygen -t ed25519 -C "github-actions-gymbeam" -f gymbeam_deploy_key -N '""'
+ssh-keygen -t ed25519 -C "github-actions-gymbeam" -f $env:USERPROFILE\.ssh\gymbeam_deploy_key_v2 -N '""'
 ```
 
-З'являться 2 файли:
+З'являться 2 файли (зберігай **поза репозиторієм**, наприклад у `C:\Users\wowan\.ssh\`):
 
-- `gymbeam_deploy_key` — **приватний** → піде в GitHub Secret
-- `gymbeam_deploy_key.pub` — **публічний** → піде на сервер
+- `gymbeam_deploy_key_v2` — **приватний** → піде в GitHub Secret
+- `gymbeam_deploy_key_v2.pub` — **публічний** → піде на сервер
 
-⚠️ Приватний ключ **ніколи** не коміть у git і нікому не надсилай.
+⚠️ **Ніколи** не роби `git add` для цих файлів. Вони в `.gitignore`.
 
 ---
 
