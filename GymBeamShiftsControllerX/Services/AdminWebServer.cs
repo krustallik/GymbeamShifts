@@ -583,7 +583,7 @@ namespace GymBeamShiftsControllerX.Services
 
       <div class='card'>
         <h2>Shift Rules</h2>
-        <label>ShiftMinHoursAhead (годин до початку зміни)</label>
+        <label>ShiftMinHoursAhead (hours before shift starts)</label>
         <input id='shiftMinHoursAhead' type='number' min='1' max='720' step='1' />
         <div class='grid'>
           <div>
