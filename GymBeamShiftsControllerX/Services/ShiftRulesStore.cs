@@ -30,7 +30,8 @@ namespace GymBeamShiftsControllerX.Services
                     IncludedWeekdays = CleanList(update.IncludedWeekdays),
                     StartTimesToSkip = CleanList(update.StartTimesToSkip),
                     Holidays = CleanList(update.Holidays),
-                    ExcludedDates = CleanList(update.ExcludedDates)
+                    ExcludedDates = CleanList(update.ExcludedDates),
+                    FavoriteShiftUsers = CleanList(update.FavoriteShiftUsers)
                 };
 
                 return Clone(_current);
@@ -49,7 +50,8 @@ namespace GymBeamShiftsControllerX.Services
                 IncludedWeekdays = new List<string>(source.IncludedWeekdays ?? new List<string>()),
                 StartTimesToSkip = new List<string>(source.StartTimesToSkip ?? new List<string>()),
                 Holidays = new List<string>(source.Holidays ?? new List<string>()),
-                ExcludedDates = new List<string>(source.ExcludedDates ?? new List<string>())
+                ExcludedDates = new List<string>(source.ExcludedDates ?? new List<string>()),
+                FavoriteShiftUsers = new List<string>(source.FavoriteShiftUsers ?? new List<string>())
             };
         }
 

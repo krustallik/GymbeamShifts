@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Text.Json;
 using GymBeamShiftsControllerX.Config;
 using GymBeamShiftsControllerX.Models;
 using GymBeamShiftsControllerX.Services;
@@ -15,17 +16,20 @@ public class ShiftRulesStoreTests
         var store = new ShiftRulesStore(new ShiftRulesSettings
         {
             IncludedWeekdays = new List<string> { "Monday" },
-            ExcludedDates = new List<string> { "2026-01-01" }
+            ExcludedDates = new List<string> { "2026-01-01" },
+            FavoriteShiftUsers = new List<string> { "Andrea Pavlíková" }
         });
 
         var firstSnapshot = store.GetSnapshot();
         firstSnapshot.IncludedWeekdays.Add("Friday");
         firstSnapshot.ExcludedDates.Clear();
+        firstSnapshot.FavoriteShiftUsers.Clear();
 
         var secondSnapshot = store.GetSnapshot();
 
         Assert.Equal(new[] { "Monday" }, secondSnapshot.IncludedWeekdays);
         Assert.Equal(new[] { "2026-01-01" }, secondSnapshot.ExcludedDates);
+        Assert.Equal(new[] { "Andrea Pavlíková" }, secondSnapshot.FavoriteShiftUsers);
     }
 
     [Fact]
@@ -38,7 +42,8 @@ public class ShiftRulesStoreTests
             IncludedWeekdays = new List<string> { "Monday", " monday ", "Friday", "" },
             StartTimesToSkip = new List<string> { "22:00", "22:00", " 21:45 " },
             Holidays = new List<string> { "2026-05-01", "2026-05-01" },
-            ExcludedDates = new List<string> { "2026-04-01", " " }
+            ExcludedDates = new List<string> { "2026-04-01", " " },
+            FavoriteShiftUsers = new List<string> { "Andrea Pavlíková", " andrea pavlíková ", "Lukáš Fialek" }
         });
 
         var snapshot = store.GetSnapshot();
@@ -46,6 +51,7 @@ public class ShiftRulesStoreTests
         Assert.Equal(new[] { "22:00", "21:45" }, snapshot.StartTimesToSkip);
         Assert.Equal(new[] { "2026-05-01" }, snapshot.Holidays);
         Assert.Equal(new[] { "2026-04-01" }, snapshot.ExcludedDates);
+        Assert.Equal(new[] { "Andrea Pavlíková", "Lukáš Fialek" }, snapshot.FavoriteShiftUsers);
     }
 
     [Fact]
@@ -94,7 +100,8 @@ public class ShiftRulesStoreTests
                 IncludedWeekdays = new List<string> { "Friday" },
                 StartTimesToSkip = new List<string> { "21:45" },
                 Holidays = new List<string> { "2026-05-08" },
-                ExcludedDates = new List<string> { "2026-05-09" }
+                ExcludedDates = new List<string> { "2026-05-09" },
+                FavoriteShiftUsers = new List<string> { "Andrea Pavlíková" }
             });
 
             string updated = System.IO.File.ReadAllText(path);
@@ -107,6 +114,11 @@ public class ShiftRulesStoreTests
             Assert.Contains("\"21:45\"", updated);
             Assert.Contains("\"2026-05-08\"", updated);
             Assert.Contains("\"2026-05-09\"", updated);
+            Assert.Contains("\"FavoriteShiftUsers\": [", updated);
+            using var updatedJson = JsonDocument.Parse(updated);
+            Assert.Equal(
+                "Andrea Pavlíková",
+                updatedJson.RootElement.GetProperty("ShiftRules").GetProperty("FavoriteShiftUsers")[0].GetString());
         }
         finally
         {

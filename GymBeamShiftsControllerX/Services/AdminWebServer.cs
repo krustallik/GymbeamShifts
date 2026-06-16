@@ -29,6 +29,7 @@ namespace GymBeamShiftsControllerX.Services
         public List<string> StartTimesToSkip { get; set; } = new List<string>();
         public List<string> Holidays { get; set; } = new List<string>();
         public List<string> ExcludedDates { get; set; } = new List<string>();
+        public List<string> FavoriteShiftUsers { get; set; } = new List<string>();
         public int ShiftMinHoursAhead { get; set; } = 48;
     }
 
@@ -38,6 +39,7 @@ namespace GymBeamShiftsControllerX.Services
         public List<string> StartTimesToSkip { get; set; } = new List<string>();
         public List<string> Holidays { get; set; } = new List<string>();
         public List<string> ExcludedDates { get; set; } = new List<string>();
+        public List<string> FavoriteShiftUsers { get; set; } = new List<string>();
         public int ShiftMinHoursAhead { get; set; }
     }
 
@@ -364,6 +366,7 @@ namespace GymBeamShiftsControllerX.Services
                 StartTimesToSkip = rules.StartTimesToSkip,
                 Holidays = rules.Holidays,
                 ExcludedDates = rules.ExcludedDates,
+                FavoriteShiftUsers = rules.FavoriteShiftUsers,
                 ShiftMinHoursAhead = _config.Timing.ShiftMinHoursAhead
             };
         }
@@ -582,6 +585,8 @@ namespace GymBeamShiftsControllerX.Services
             <textarea id='includedWeekdays' rows='6'></textarea>
             <label>StartTimesToSkip (one per line)</label>
             <textarea id='startTimesToSkip' rows='6'></textarea>
+            <label>FavoriteShiftUsers (one per line)</label>
+            <textarea id='favoriteShiftUsers' rows='6'></textarea>
           </div>
           <div>
             <label>Holidays yyyy-MM-dd (one per line)</label>
@@ -651,6 +656,7 @@ namespace GymBeamShiftsControllerX.Services
       document.getElementById('shiftMinHoursAhead').value = rules.shiftMinHoursAhead ?? 48;
       document.getElementById('includedWeekdays').value = arrayToLines(rules.includedWeekdays);
       document.getElementById('startTimesToSkip').value = arrayToLines(rules.startTimesToSkip);
+      document.getElementById('favoriteShiftUsers').value = arrayToLines(rules.favoriteShiftUsers);
       document.getElementById('holidays').value = arrayToLines(rules.holidays);
       document.getElementById('excludedDates').value = arrayToLines(rules.excludedDates);
     }
@@ -660,6 +666,7 @@ namespace GymBeamShiftsControllerX.Services
         shiftMinHoursAhead: Number(document.getElementById('shiftMinHoursAhead').value),
         includedWeekdays: linesToArray(document.getElementById('includedWeekdays').value),
         startTimesToSkip: linesToArray(document.getElementById('startTimesToSkip').value),
+        favoriteShiftUsers: linesToArray(document.getElementById('favoriteShiftUsers').value),
         holidays: linesToArray(document.getElementById('holidays').value),
         excludedDates: linesToArray(document.getElementById('excludedDates').value)
       };

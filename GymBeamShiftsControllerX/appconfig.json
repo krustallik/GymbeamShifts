@@ -49,6 +49,7 @@
     "IncludedWeekdays": [
       "Monday",
       "Friday"
-    ]
+    ],
+    "FavoriteShiftUsers": []
   }
 }

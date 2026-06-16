@@ -121,8 +121,9 @@ namespace GymBeamShiftsControllerX.Services
             var excludedDates = ParseDateSet(rules.ExcludedDates);
             var startTimesToSkip = rules.StartTimesToSkip ?? new List<string>();
             var includedWeekdays = ParseWeekdaySet(rules.IncludedWeekdays);
+            var favoriteShiftUserPriorities = ParseFavoriteShiftUserPriorities(rules.FavoriteShiftUsers);
 
-            foreach (var shift in shiftList)
+            foreach (var shift in PrioritizeShiftsByFavoriteUsers(shiftList, favoriteShiftUserPriorities))
             {
                 if (startTimesToSkip.Contains(shift.TimeFrom))
                 {
@@ -262,6 +263,125 @@ namespace GymBeamShiftsControllerX.Services
             }
 
             return result;
+        }
+
+        private static Dictionary<string, int> ParseFavoriteShiftUserPriorities(List<string> users)
+        {
+            var result = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+            if (users == null)
+            {
+                return result;
+            }
+
+            foreach (var user in users)
+            {
+                if (string.IsNullOrWhiteSpace(user))
+                {
+                    continue;
+                }
+
+                var trimmed = user.Trim();
+                if (!result.ContainsKey(trimmed))
+                {
+                    result.Add(trimmed, result.Count);
+                }
+            }
+
+            return result;
+        }
+
+        private static List<ShiftEntry> PrioritizeShiftsByFavoriteUsers(
+            List<ShiftEntry> shifts,
+            Dictionary<string, int> favoriteShiftUserPriorities)
+        {
+            if (shifts == null || shifts.Count == 0 || favoriteShiftUserPriorities == null || favoriteShiftUserPriorities.Count == 0)
+            {
+                return shifts ?? new List<ShiftEntry>();
+            }
+
+            var result = new List<ShiftEntry>(shifts.Count);
+            var processedDates = new HashSet<DateTime>();
+
+            foreach (var currentShift in shifts)
+            {
+                var currentDate = currentShift.Date.Date;
+                if (!processedDates.Add(currentDate))
+                {
+                    continue;
+                }
+
+                var sameDateShifts = new List<ShiftEntry>();
+                foreach (var shift in shifts)
+                {
+                    if (shift.Date.Date == currentDate)
+                    {
+                        sameDateShifts.Add(shift);
+                    }
+                }
+
+                result.AddRange(HasMultipleDifferentUsers(sameDateShifts)
+                    ? PrioritizeSameDateShifts(sameDateShifts, favoriteShiftUserPriorities)
+                    : sameDateShifts);
+            }
+
+            return result;
+        }
+
+        private static bool HasMultipleDifferentUsers(List<ShiftEntry> shifts)
+        {
+            var users = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var shift in shifts)
+            {
+                users.Add((shift.UserId ?? string.Empty).Trim());
+                if (users.Count >= 2)
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private static List<ShiftEntry> PrioritizeSameDateShifts(
+            List<ShiftEntry> shifts,
+            Dictionary<string, int> favoriteShiftUserPriorities)
+        {
+            var indexedShifts = new List<(ShiftEntry Shift, int Index)>();
+            for (int i = 0; i < shifts.Count; i++)
+            {
+                indexedShifts.Add((shifts[i], i));
+            }
+
+            indexedShifts.Sort((left, right) =>
+            {
+                int priorityComparison = GetFavoriteShiftUserPriority(left.Shift, favoriteShiftUserPriorities)
+                    .CompareTo(GetFavoriteShiftUserPriority(right.Shift, favoriteShiftUserPriorities));
+                return priorityComparison != 0
+                    ? priorityComparison
+                    : left.Index.CompareTo(right.Index);
+            });
+
+            var result = new List<ShiftEntry>(indexedShifts.Count);
+            foreach (var indexedShift in indexedShifts)
+            {
+                result.Add(indexedShift.Shift);
+            }
+
+            return result;
+        }
+
+        private static int GetFavoriteShiftUserPriority(
+            ShiftEntry shift,
+            Dictionary<string, int> favoriteShiftUserPriorities)
+        {
+            if (string.IsNullOrWhiteSpace(shift.UserId))
+            {
+                return int.MaxValue;
+            }
+
+            return favoriteShiftUserPriorities.TryGetValue(shift.UserId.Trim(), out int priority)
+                ? priority
+                : int.MaxValue;
         }
     }
 }
