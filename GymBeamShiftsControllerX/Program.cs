@@ -153,7 +153,7 @@ namespace GymBeamShiftsControllerX
         private static void TrySendDailyStatus(AppConfig config, DateTime startTime)
         {
             var now = DateTime.Now;
-            if (now.TimeOfDay < DailyStatusTime || lastDailyStatusDate == now.Date)
+            if (!ShouldSendDailyStatus(now, lastDailyStatusDate))
             {
                 return;
             }
@@ -172,9 +172,14 @@ namespace GymBeamShiftsControllerX
             }
         }
 
+        private static bool ShouldSendDailyStatus(DateTime now, DateTime lastSentDate)
+        {
+            return now.TimeOfDay >= DailyStatusTime && lastSentDate != now.Date;
+        }
+
         private static void TrySendErrorNotification(AppConfig config, Exception ex, string category)
         {
-            if (totalIterationCount - lastErrorNotificationIteration < ErrorNotificationIntervalIterations)
+            if (!ShouldSendErrorNotification(totalIterationCount, lastErrorNotificationIteration))
             {
                 return;
             }
@@ -191,6 +196,11 @@ namespace GymBeamShiftsControllerX
                 lastErrorNotificationIteration = totalIterationCount;
                 Logger.Log("Отправлено уведомление об ошибке в Telegram.");
             }
+        }
+
+        private static bool ShouldSendErrorNotification(long totalIterations, long lastNotificationIteration)
+        {
+            return totalIterations - lastNotificationIteration >= ErrorNotificationIntervalIterations;
         }
 
         private static bool TrySendTelegram(AppConfig config, string message)

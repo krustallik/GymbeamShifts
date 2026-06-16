@@ -60,15 +60,21 @@ namespace GymBeamShiftsControllerX.Services
         private readonly AppConfig _config;
         private readonly ShiftRulesStore _shiftRulesStore;
         private readonly Func<BotStatusSnapshot> _statusProvider;
+        private readonly string _configFileName;
         private readonly object _loginAttemptsLock = new object();
         private readonly Dictionary<string, List<DateTime>> _loginAttemptsByIp = new Dictionary<string, List<DateTime>>();
         private Thread? _serverThread;
 
-        public AdminWebServer(AppConfig config, ShiftRulesStore shiftRulesStore, Func<BotStatusSnapshot> statusProvider)
+        public AdminWebServer(
+            AppConfig config,
+            ShiftRulesStore shiftRulesStore,
+            Func<BotStatusSnapshot> statusProvider,
+            string configFileName = AppConstants.ConfigFileName)
         {
             _config = config;
             _shiftRulesStore = shiftRulesStore;
             _statusProvider = statusProvider;
+            _configFileName = configFileName;
         }
 
         public void Start()
@@ -286,8 +292,8 @@ namespace GymBeamShiftsControllerX.Services
                 var updatedRules = _shiftRulesStore.Update(update);
                 _config.ShiftRules = updatedRules;
                 _config.Timing.ShiftMinHoursAhead = shiftMinHoursAhead;
-                ConfigurationLoader.SaveShiftRules(AppConstants.ConfigFileName, updatedRules);
-                ConfigurationLoader.SaveShiftMinHoursAhead(AppConstants.ConfigFileName, shiftMinHoursAhead);
+                ConfigurationLoader.SaveShiftRules(_configFileName, updatedRules);
+                ConfigurationLoader.SaveShiftMinHoursAhead(_configFileName, shiftMinHoursAhead);
 
                 Logger.Log("ShiftRules updated from admin API.");
                 WriteJson(context.Response, 200, new { ok = true });

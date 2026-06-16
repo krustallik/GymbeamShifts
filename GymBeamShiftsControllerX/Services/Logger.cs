@@ -6,11 +6,11 @@ namespace GymBeamShiftsControllerX.Services
     public static class Logger
     {
         private static readonly object LockObject = new object();
-        private static readonly string LogFilePath = ResolveLogFilePath();
+        private static string? _logFilePath;
 
         public static string GetLogFilePath()
         {
-            return LogFilePath;
+            return _logFilePath ??= ResolveLogFilePath();
         }
 
         public static void Log(string message)
@@ -19,14 +19,15 @@ namespace GymBeamShiftsControllerX.Services
             {
                 try
                 {
-                    string? directory = Path.GetDirectoryName(LogFilePath);
+                    string logFilePath = GetLogFilePath();
+                    string? directory = Path.GetDirectoryName(logFilePath);
                     if (!string.IsNullOrWhiteSpace(directory))
                     {
                         Directory.CreateDirectory(directory);
                     }
 
                     File.AppendAllText(
-                        LogFilePath,
+                        logFilePath,
                         $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - {message}{Environment.NewLine}"
                     );
                 }

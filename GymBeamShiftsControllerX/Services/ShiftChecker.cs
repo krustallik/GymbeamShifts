@@ -125,51 +125,18 @@ namespace GymBeamShiftsControllerX.Services
 
             foreach (var shift in PrioritizeShiftsByFavoriteUsers(shiftList, favoriteShiftUserPriorities))
             {
-                if (startTimesToSkip.Contains(shift.TimeFrom))
+                if (!IsRelevantShift(
+                        shift,
+                        holidays,
+                        excludedDates,
+                        startTimesToSkip,
+                        includedWeekdays,
+                        _config.Timing.ShiftMinHoursAhead,
+                        DateTime.Now))
                 {
                     continue;
                 }
 
-                if (excludedDates.Contains(shift.Date.Date))
-                {
-                    continue;
-                }
-
-                DayOfWeek dow = shift.Date.DayOfWeek;
-                bool isWeekend = (dow == DayOfWeek.Saturday || dow == DayOfWeek.Sunday);
-                bool isIncludedWeekday = includedWeekdays.Contains(dow);
-
-                bool isHoliday = holidays.Contains(shift.Date.Date);
-
-                var timeParts = shift.TimeFrom.Split(':');
-                if (timeParts.Length != 2)
-                {
-                    continue;
-                }
-
-                if (!int.TryParse(timeParts[0], out int shiftHour))
-                {
-                    continue;
-                }
-
-                if (!int.TryParse(timeParts[1], out int shiftMinute))
-                {
-                    continue;
-                }
-
-                var shiftStart = shift.Date.AddHours(shiftHour).AddMinutes(shiftMinute);
-
-                if (shiftStart < DateTime.Now.AddHours(_config.Timing.ShiftMinHoursAhead))
-                {
-                    continue;
-                }
-
-                if (
-                    //(shift.UserId == "Lukáš Fialek" || shift.UserId == "Andrea Pavlíková" || shift.UserId == "Marián Sipko"
-                    //||
-                    (isWeekend || isHoliday || isIncludedWeekday) &&
-                    shift.ButtonElement != null
-                )
                 {
                     string message = $"Shift found: {shift.Date:dd.MM.yyyy} {shift.TimeFrom}-{shift.TimeTo}, User: {shift.UserId}";
                     Logger.Log($"Найдена релевантная смена: {message}");
@@ -219,6 +186,66 @@ namespace GymBeamShiftsControllerX.Services
                     return;
                 }
             }
+        }
+
+        private static bool TryParseShiftStart(ShiftEntry shift, out DateTime shiftStart)
+        {
+            shiftStart = default;
+            var timeParts = shift.TimeFrom.Split(':');
+            if (timeParts.Length != 2)
+            {
+                return false;
+            }
+
+            if (!int.TryParse(timeParts[0], out int shiftHour))
+            {
+                return false;
+            }
+
+            if (!int.TryParse(timeParts[1], out int shiftMinute))
+            {
+                return false;
+            }
+
+            shiftStart = shift.Date.AddHours(shiftHour).AddMinutes(shiftMinute);
+            return true;
+        }
+
+        private static bool IsRelevantShift(
+            ShiftEntry shift,
+            HashSet<DateTime> holidays,
+            HashSet<DateTime> excludedDates,
+            IReadOnlyList<string> startTimesToSkip,
+            HashSet<DayOfWeek> includedWeekdays,
+            int shiftMinHoursAhead,
+            DateTime now)
+        {
+            if (startTimesToSkip.Contains(shift.TimeFrom))
+            {
+                return false;
+            }
+
+            if (excludedDates.Contains(shift.Date.Date))
+            {
+                return false;
+            }
+
+            DayOfWeek dow = shift.Date.DayOfWeek;
+            bool isWeekend = dow == DayOfWeek.Saturday || dow == DayOfWeek.Sunday;
+            bool isIncludedWeekday = includedWeekdays.Contains(dow);
+            bool isHoliday = holidays.Contains(shift.Date.Date);
+
+            if (!TryParseShiftStart(shift, out DateTime shiftStart))
+            {
+                return false;
+            }
+
+            if (shiftStart < now.AddHours(shiftMinHoursAhead))
+            {
+                return false;
+            }
+
+            return (isWeekend || isHoliday || isIncludedWeekday) && shift.ButtonElement != null;
         }
 
         private static HashSet<DateTime> ParseDateSet(List<string> dates)

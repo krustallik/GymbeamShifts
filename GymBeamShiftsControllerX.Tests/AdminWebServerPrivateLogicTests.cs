@@ -1,12 +1,15 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Reflection;
+using System.Text;
 using GymBeamShiftsControllerX.Models;
 using GymBeamShiftsControllerX.Services;
 using Xunit;
 
 namespace GymBeamShiftsControllerX.Tests;
 
+[Collection("MutableEnvironment")]
 public class AdminWebServerPrivateLogicTests
 {
     [Fact]
@@ -32,9 +35,41 @@ public class AdminWebServerPrivateLogicTests
         var validateToken = GetStaticMethod("TryValidateToken");
 
         var token = (string)createToken.Invoke(null, new object[] { "admin" })!;
-        token = token + "tamper";
+        token += "tamper";
 
         var args = new object?[] { token, null };
+        var isValid = (bool)validateToken.Invoke(null, args)!;
+
+        Assert.False(isValid);
+    }
+
+    [Fact]
+    public void SignedToken_BecomesInvalid_WhenExpired()
+    {
+        Environment.SetEnvironmentVariable("GYMBEAM_ADMIN_TOKEN_SECRET", "unit-test-secret");
+        var validateToken = GetStaticMethod("TryValidateToken");
+        var signPayload = GetStaticMethod("SignPayload");
+        var encode = GetStaticMethod("Base64UrlEncode");
+
+        long expiredAtUnix = DateTimeOffset.UtcNow.AddMinutes(-5).ToUnixTimeSeconds();
+        string payload = $"admin|{expiredAtUnix}|nonce";
+        string payloadPart = (string)encode.Invoke(null, new object[] { Encoding.UTF8.GetBytes(payload) })!;
+        string signaturePart = (string)encode.Invoke(null, new object[] { signPayload.Invoke(null, new object[] { payloadPart })! })!;
+        string token = $"{payloadPart}.{signaturePart}";
+
+        var args = new object?[] { token, null };
+        var isValid = (bool)validateToken.Invoke(null, args)!;
+
+        Assert.False(isValid);
+    }
+
+    [Fact]
+    public void SignedToken_BecomesInvalid_WhenMalformed()
+    {
+        Environment.SetEnvironmentVariable("GYMBEAM_ADMIN_TOKEN_SECRET", "unit-test-secret");
+        var validateToken = GetStaticMethod("TryValidateToken");
+
+        var args = new object?[] { "not-a-valid-token", null };
         var isValid = (bool)validateToken.Invoke(null, args)!;
 
         Assert.False(isValid);
@@ -71,6 +106,139 @@ public class AdminWebServerPrivateLogicTests
         Assert.False(limited);
     }
 
+    [Theory]
+    [InlineData(0, 1)]
+    [InlineData(999, 720)]
+    [InlineData(100, 100)]
+    public void NormalizeShiftMinHoursAhead_ClampsToExpectedRange(int input, int expected)
+    {
+        var method = GetStaticMethod("NormalizeShiftMinHoursAhead");
+        var result = (int)method.Invoke(null, new object[] { input })!;
+        Assert.Equal(expected, result);
+    }
+
+    [Theory]
+    [InlineData(null, 200, 200)]
+    [InlineData("abc", 200, 200)]
+    [InlineData("0", 200, 1)]
+    [InlineData("5000", 200, 1000)]
+    public void ParseIntOrDefault_UsesFallbackAndClamp(string? input, int fallback, int expected)
+    {
+        var method = GetStaticMethod("ParseIntOrDefault");
+        var result = (int)method.Invoke(null, new object[] { input!, fallback })!;
+        Assert.Equal(expected, result);
+    }
+
+    [Fact]
+    public void ValidateAdminCredentials_UsesEnvironmentVariables()
+    {
+        Environment.SetEnvironmentVariable("GYMBEAM_ADMIN_USER", "env-admin");
+        Environment.SetEnvironmentVariable("GYMBEAM_ADMIN_PASSWORD", "env-pass");
+        var method = GetStaticMethod("ValidateAdminCredentials");
+
+        try
+        {
+            Assert.True((bool)method.Invoke(null, new object[] { "env-admin", "env-pass" })!);
+            Assert.False((bool)method.Invoke(null, new object[] { "env-admin", "wrong" })!);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("GYMBEAM_ADMIN_USER", null);
+            Environment.SetEnvironmentVariable("GYMBEAM_ADMIN_PASSWORD", null);
+        }
+    }
+
+    [Fact]
+    public void ReadTodayLogLines_ReturnsEmptyWhenFileMissing()
+    {
+        Environment.SetEnvironmentVariable("GYMBEAM_LOG_PATH", Path.Combine(Path.GetTempPath(), $"missing-{Guid.NewGuid():N}.log"));
+        ResetLoggerPath();
+
+        try
+        {
+            var method = GetStaticMethod("ReadTodayLogLines");
+            var lines = (List<string>)method.Invoke(null, new object[] { 100 })!;
+            Assert.Empty(lines);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("GYMBEAM_LOG_PATH", null);
+            ResetLoggerPath();
+        }
+    }
+
+    [Fact]
+    public void ReadTodayLogLines_FiltersByTodayAndAppliesTailLimit()
+    {
+        string logPath = Path.Combine(Path.GetTempPath(), $"admin-log-{Guid.NewGuid():N}.log");
+        Environment.SetEnvironmentVariable("GYMBEAM_LOG_PATH", logPath);
+        ResetLoggerPath();
+
+        try
+        {
+            string today = DateTime.Now.ToString("yyyy-MM-dd");
+            string yesterday = DateTime.Now.AddDays(-1).ToString("yyyy-MM-dd");
+            File.WriteAllLines(logPath, new[]
+            {
+                $"{yesterday} 09:00:00 - old",
+                $"{today} 09:00:00 - one",
+                $"{today} 09:01:00 - two",
+                $"{today} 09:02:00 - three"
+            });
+
+            var method = GetStaticMethod("ReadTodayLogLines");
+            var lines = (List<string>)method.Invoke(null, new object[] { 2 })!;
+
+            Assert.Equal(2, lines.Count);
+            Assert.Contains("two", lines[0]);
+            Assert.Contains("three", lines[1]);
+        }
+        finally
+        {
+            if (File.Exists(logPath))
+            {
+                File.Delete(logPath);
+            }
+
+            Environment.SetEnvironmentVariable("GYMBEAM_LOG_PATH", null);
+            ResetLoggerPath();
+        }
+    }
+
+    [Fact]
+    public void BuildShiftRulesApiResponse_IncludesFavoriteShiftUsersAndShiftMinHoursAhead()
+    {
+        var cfg = new AppConfig
+        {
+            Timing = new TimingSettings { ShiftMinHoursAhead = 55 },
+            ShiftRules = new ShiftRulesSettings
+            {
+                IncludedWeekdays = new List<string> { "Monday" },
+                FavoriteShiftUsers = new List<string> { "Andrea Pavlíková" }
+            }
+        };
+        var store = new ShiftRulesStore(cfg.ShiftRules);
+        var server = new AdminWebServer(cfg, store, () => new BotStatusSnapshot());
+        var method = GetInstanceMethod("BuildShiftRulesApiResponse");
+        var response = (ShiftRulesApiResponse)method.Invoke(server, null)!;
+
+        Assert.Equal(55, response.ShiftMinHoursAhead);
+        Assert.Equal(new[] { "Andrea Pavlíková" }, response.FavoriteShiftUsers);
+    }
+
+    [Fact]
+    public void Base64UrlEncodeDecode_RoundTripsBytes()
+    {
+        var encode = GetStaticMethod("Base64UrlEncode");
+        var decode = GetStaticMethod("Base64UrlDecode");
+        byte[] original = { 1, 2, 3, 250 };
+
+        string encoded = (string)encode.Invoke(null, new object[] { original })!;
+        byte[] decoded = (byte[])decode.Invoke(null, new object[] { encoded })!;
+
+        Assert.Equal(original, decoded);
+    }
+
     private static AdminWebServer CreateServer()
     {
         var cfg = new AppConfig
@@ -92,13 +260,16 @@ public class AdminWebServerPrivateLogicTests
 
     private static MethodInfo GetStaticMethod(string name)
     {
-        return typeof(AdminWebServer).GetMethod(name, BindingFlags.Static | BindingFlags.NonPublic)
-               ?? throw new InvalidOperationException($"Method {name} not found.");
+        return ReflectionTestHelper.GetStaticMethod(typeof(AdminWebServer), name);
     }
 
     private static MethodInfo GetInstanceMethod(string name)
     {
-        return typeof(AdminWebServer).GetMethod(name, BindingFlags.Instance | BindingFlags.NonPublic)
-               ?? throw new InvalidOperationException($"Method {name} not found.");
+        return ReflectionTestHelper.GetInstanceMethod(typeof(AdminWebServer), name);
+    }
+
+    private static void ResetLoggerPath()
+    {
+        ReflectionTestHelper.SetStaticField(typeof(Logger), "_logFilePath", null);
     }
 }
