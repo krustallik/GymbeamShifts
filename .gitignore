@@ -13,3 +13,9 @@ packages/
 GymBeamShiftsControllerX/appconfig.local.json
 runtime-data/
 nginx/.htpasswd
+gymbeam_deploy_key
+gymbeam_deploy_key.pub
+gymbeam_deploy_key_v2
+gymbeam_deploy_key_v2.pub
+*_deploy_key
+*_deploy_key.pub
