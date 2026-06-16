@@ -1,214 +1,347 @@
-# Deploy на Ubuntu-сервер через GitHub Actions
+# CI/CD: повна інструкція (GitHub Actions → Ubuntu)
 
-Цей flow робить так:
+Репозиторій: `https://github.com/krustallik/GymbeamShifts`
 
-1. Push у `main` → GitHub запускає тести
-2. Якщо тести пройшли → GitHub підключається по SSH до твого Ubuntu-сервера
-3. На сервері виконується `scripts/deploy.sh`:
-   - `git pull` останнього коду
-   - `docker compose up -d --build`
-4. Секрети **не** їдуть з GitHub — вони лишаються на сервері в `.env`
+## Що відбувається автоматично
 
-## Що залишається тільки на сервері (не в git)
+```
+Push у main (з твого ПК)
+        ↓
+GitHub Actions: dotnet test (85 тестів)
+        ↓ (якщо ✅)
+GitHub Actions: SSH на Ubuntu-сервер
+        ↓
+scripts/deploy.sh → git pull + docker compose up -d --build
+```
 
-- `GymBeamShiftsControllerX/.env` — логін, пароль, Telegram token
-- `nginx/.htpasswd` — Basic Auth для Nginx
-- `runtime-data/` — логи бота
-- локальні зміни в `appconfig.json`, якщо ти їх робив вручну на сервері
+**Pull request** → тільки тести, без deploy.  
+**Push у main** → тести + deploy.
 
 ---
 
-## 1. Одноразове налаштування Ubuntu-сервера
+## Де що робиться (швидка таблиця)
 
-Підключись до сервера:
+| Крок | Де | Скільки разів |
+|------|-----|---------------|
+| Код, тести, workflow | ПК → git push | постійно |
+| GitHub Secrets | GitHub.com (браузер) | 1 раз |
+| Environment `production` | GitHub.com (браузер) | 1 раз |
+| SSH-ключ для Actions | ПК (генерація) | 1 раз |
+| Публічний ключ у `authorized_keys` | **Сервер** | 1 раз |
+| `git pull` доступ (deploy key) | **Сервер** + GitHub | 1 раз (якщо repo private) |
+| `.env`, htpasswd, runtime-data | **Сервер** | 1 раз (вже є, якщо бот працює) |
+| Оновлення до нової версії | **Сервер** | 1 раз зараз, далі автоматично |
+| Щоденна робота | ПК: `git push` | кожна зміна |
+
+---
+
+# ЧАСТИНА A — На ПК (Windows)
+
+## A1. Переконайся, що CI/CD файли в git
+
+У репозиторії мають бути:
+
+- `.github/workflows/ci.yml`
+- `scripts/deploy.sh`
+- `GymBeamShiftsController.sln` + тести
+
+Якщо зміни ще не на GitHub:
+
+```powershell
+cd D:\Gymbeam\GymBeamShiftsController
+git status
+git push origin main
+```
+
+## A2. Згенеруй SSH-ключ для GitHub Actions
+
+**На ПК** (PowerShell або Git Bash):
+
+```powershell
+ssh-keygen -t ed25519 -C "github-actions-gymbeam" -f gymbeam_deploy_key -N '""'
+```
+
+З'являться 2 файли:
+
+- `gymbeam_deploy_key` — **приватний** → піде в GitHub Secret
+- `gymbeam_deploy_key.pub` — **публічний** → піде на сервер
+
+⚠️ Приватний ключ **ніколи** не коміть у git і нікому не надсилай.
+
+---
+
+# ЧАСТИНА B — GitHub (браузер)
+
+Відкрий: `https://github.com/krustallik/GymbeamShifts`
+
+## B1. Створи Environment `production`
+
+1. **Settings → Environments → New environment**
+2. Name: `production`
+3. (Опційно) **Required reviewers** — якщо хочеш підтверджувати deploy вручну
+4. **Save protection rules**
+
+> Без цього job `deploy` може падати з помилкою про environment.
+
+## B2. Додай Secrets
+
+**Settings → Secrets and variables → Actions → New repository secret**
+
+| Secret | Що вставити | Приклад |
+|--------|-------------|---------|
+| `SSH_HOST` | IP або домен сервера | `203.0.113.10` |
+| `SSH_USER` | Linux-користувач для SSH | `root` або `deploy` |
+| `SSH_PRIVATE_KEY` | **Весь** вміст файлу `gymbeam_deploy_key` | `-----BEGIN OPENSSH PRIVATE KEY-----...` |
+| `DEPLOY_PATH` | Шлях до проекту на сервері (де `docker-compose.yml`) | `/home/user/GymbeamShifts` |
+
+`DEPLOY_PATH` дізнаєшся на сервері командою `pwd` у папці проекту.
+
+---
+
+# ЧАСТИНА C — На Ubuntu-сервері
+
+Підключись:
 
 ```bash
-ssh user@YOUR_SERVER_IP
+ssh YOUR_USER@YOUR_SERVER_IP
+cd /шлях/до/проекту    # тут має бути docker-compose.yml
+pwd                     # цей шлях → DEPLOY_PATH у GitHub
 ```
 
-### Встанови Docker
+## C1. Якщо проект УЖЕ запущений (твій випадок)
+
+### Backup (рекомендовано)
 
 ```bash
-sudo apt update
-sudo apt install -y git ca-certificates curl
-curl -fsSL https://get.docker.com | sudo sh
-sudo usermod -aG docker "$USER"
-newgrp docker
-docker compose version
+cd /шлях/до/проекту
+cp GymBeamShiftsControllerX/.env ~/.env.backup
+cp GymBeamShiftsControllerX/appconfig.json ~/appconfig.backup
+cp nginx/.htpasswd ~/.htpasswd.backup
 ```
 
-### Створи deploy-користувача (рекомендовано)
+### Перевір git
 
 ```bash
-sudo adduser --disabled-password --gecos "" deploy
-sudo usermod -aG docker deploy
-sudo mkdir -p /home/deploy/.ssh
-sudo chmod 700 /home/deploy/.ssh
+git status
+git remote -v
 ```
 
-### Склонуй репозиторій
+Має бути remote `origin` → `github.com/krustallik/GymbeamShifts`.
+
+### Онови код до актуальної версії (вручну, один раз)
 
 ```bash
-sudo mkdir -p /opt/gymbeam
-sudo chown deploy:deploy /opt/gymbeam
-sudo -u deploy git clone https://github.com/krustallik/GymbeamShifts.git /opt/gymbeam/app
-cd /opt/gymbeam/app
+git fetch origin main
+git pull origin main
 ```
 
-### Налаштуй секрети на сервері (один раз)
+Перевір, що в `GymBeamShiftsControllerX/appconfig.json` є:
 
-```bash
-cp GymBeamShiftsControllerX/.env.example GymBeamShiftsControllerX/.env   # якщо є example
-nano GymBeamShiftsControllerX/.env
+```json
+"FavoriteShiftUsers": []
 ```
 
-Мінімум у `.env`:
+Додай улюблених ведучих (якщо потрібно):
 
-```env
-GYMBEAM_AUTH_LOGIN=...
-GYMBEAM_AUTH_PASSWORD=...
-GYMBEAM_TELEGRAM_BOT_TOKEN=...
-GYMBEAM_TELEGRAM_CHAT_ID=...
-GYMBEAM_ADMIN_USER=admin
-GYMBEAM_ADMIN_PASSWORD=...
-GYMBEAM_ADMIN_TOKEN_SECRET=...
+```json
+"FavoriteShiftUsers": [
+  "Andrea Pavlíková"
+]
 ```
 
-Basic Auth для Nginx:
-
-```bash
-printf "admin:$(openssl passwd -apr1 'YOUR_PASSWORD')\n" > nginx/.htpasswd
-mkdir -p runtime-data
-```
-
-### Перший ручний запуск
+### Перезапусти контейнер
 
 ```bash
 docker compose up -d --build
 docker compose ps
+tail -n 30 runtime-data/app.log
 ```
 
-Перевір: `http://YOUR_SERVER_IP/`
+Перевір адмінку: `http://YOUR_SERVER_IP/`
 
 ---
 
-## 2. SSH-ключ для GitHub Actions
+## C2. Дозволь GitHub Actions заходити по SSH
 
-На **своєму комп'ютері** (не на сервері):
-
-```bash
-ssh-keygen -t ed25519 -C "github-actions-gymbeam" -f gymbeam_deploy_key -N ""
-```
-
-Додай **публічний** ключ на сервер:
+На сервері під тим же user, що в `SSH_USER`:
 
 ```bash
-ssh deploy@YOUR_SERVER_IP
 mkdir -p ~/.ssh
 chmod 700 ~/.ssh
 nano ~/.ssh/authorized_keys
-# встав вміст gymbeam_deploy_key.pub
+```
+
+Встав **одним рядком** вміст `gymbeam_deploy_key.pub` (з ПК), збережи.
+
+```bash
 chmod 600 ~/.ssh/authorized_keys
 ```
 
-Перевір:
+### Перевір з ПК
 
-```bash
-ssh -i gymbeam_deploy_key deploy@YOUR_SERVER_IP "cd /opt/gymbeam/app && git status"
+```powershell
+ssh -i gymbeam_deploy_key YOUR_USER@YOUR_SERVER_IP "cd /шлях/до/проекту && git status"
 ```
 
----
-
-## 3. GitHub Secrets
-
-У репозиторії: **Settings → Secrets and variables → Actions → New repository secret**
-
-| Secret | Приклад | Опис |
-|--------|---------|------|
-| `SSH_HOST` | `203.0.113.10` | IP або домен сервера |
-| `SSH_USER` | `deploy` | Linux-користувач для deploy |
-| `SSH_PRIVATE_KEY` | вміст `gymbeam_deploy_key` | приватний ключ (весь файл) |
-| `DEPLOY_PATH` | `/opt/gymbeam/app` | шлях до репозиторію на сервері |
-
-Опційно: **Settings → Environments → New environment → `production`**  
-→ увімкни **Required reviewers**, якщо хочеш ручне підтвердження перед deploy.
+Якщо заходить без пароля — OK.
 
 ---
 
-## 4. Як працює CI/CD
+## C3. Якщо репозиторій PRIVATE — deploy key для git pull
 
-Файл `.github/workflows/ci.yml`:
+GitHub Actions заходить по SSH, але **`git pull` на сервері** теж потребує доступу до GitHub.
 
-- **pull request** → тільки `test`
-- **push у main** → `test`, потім `deploy` (якщо test пройшов)
-
-Deploy-крок:
+### На сервері
 
 ```bash
-cd $DEPLOY_PATH
+ssh-keygen -t ed25519 -f ~/.ssh/github_deploy -N ""
+cat ~/.ssh/github_deploy.pub
+```
+
+### У GitHub
+
+**Settings → Deploy keys → Add deploy key**
+
+- Title: `ubuntu-server`
+- Key: вміст `github_deploy.pub`
+- ✅ Allow read-only access
+
+### На сервері — налаштуй git
+
+```bash
+cd /шлях/до/проекту
+git remote set-url origin git@github.com:krustallik/GymbeamShifts.git
+git pull origin main
+```
+
+Якщо питає fingerprint — підтверди.
+
+> Якщо repo **public**, deploy key не обов'язковий — `git pull` через HTTPS теж працює.
+
+---
+
+## C4. Перевір, що deploy-скрипт працює
+
+```bash
+cd /шлях/до/проекту
 bash scripts/deploy.sh
 ```
 
----
+Очікуваний результат:
 
-## 5. Перевірка після налаштування
+- `git pull` без помилок
+- `docker compose up -d --build`
+- `Deploy finished successfully.`
 
-1. Зроби commit + push у `main`
-2. Відкрий **GitHub → Actions**
-3. Має бути:
-   - job `test` ✅
-   - job `deploy` ✅
-4. На сервері:
+Якщо помилка `.env not found` — файл має бути тут:
+
+```
+/шлях/до/проекту/GymBeamShiftsControllerX/.env
+```
+
+Якщо помилка `.htpasswd not found`:
 
 ```bash
-cd /opt/gymbeam/app
+printf "admin:$(openssl passwd -apr1 'YOUR_PASSWORD')\n" > nginx/.htpasswd
+```
+
+---
+
+# ЧАСТИНА D — Перший автоматичний deploy
+
+## D1. Запуск
+
+**Варіант 1** — push з ПК:
+
+```powershell
+git commit --allow-empty -m "Trigger CI/CD deploy"
+git push origin main
+```
+
+**Варіант 2** — вручну в GitHub:
+
+**Actions → CI → Run workflow → Run workflow**
+
+> `Run workflow` запускає тести. Deploy автоматично піде тільки якщо це push у `main` (не workflow_dispatch для deploy job — deploy прив'язаний до push).  
+> Тому для першого deploy краще зробити push.
+
+## D2. Перевір в GitHub
+
+**Actions → останній workflow run**
+
+Має бути:
+
+1. ✅ **test** (~85 tests passed)
+2. ✅ **Deploy to Ubuntu**
+
+## D3. Перевір на сервері
+
+```bash
+cd /шлях/до/проекту
+git log -1 --oneline
 docker compose ps
-tail -n 50 runtime-data/app.log
+tail -n 20 runtime-data/app.log
 ```
 
 ---
 
-## Troubleshooting
+# Щоденна робота (після налаштування)
 
-### `Permission denied (publickey)`
+Тільки на **ПК**:
 
-- перевір `SSH_PRIVATE_KEY` у GitHub Secrets
-- перевір `authorized_keys` на сервері
-- перевір `SSH_USER` і `SSH_HOST`
-
-### `GymBeamShiftsControllerX/.env not found`
-
-- створи `.env` на сервері вручну (див. вище)
-
-### `docker: permission denied`
-
-```bash
-sudo usermod -aG docker deploy
-# перелогінься
+```powershell
+# змінив код
+git add .
+git commit -m "опис змін"
+git push origin main
 ```
 
-### Deploy перезаписав локальний `appconfig.json`
+GitHub сам:
 
-- або тримай конфіг у git
-- або на сервері: `git update-index --skip-worktree GymBeamShiftsControllerX/appconfig.json`
+1. прогонить тести
+2. задеплоїть на сервер
 
-### Хочеш deploy не на кожен push, а вручну
-
-У workflow можна додати:
-
-```yaml
-on:
-  workflow_dispatch:
-```
-
-Тоді deploy запускатиметься кнопкою **Run workflow** в GitHub Actions.
+**На сервер заходити не потрібно**, якщо все налаштовано.
 
 ---
 
-## Безпека (коротко)
+# Що НЕ їде через CI/CD (залишається на сервері)
 
-- окремий `deploy` user, не `root`
-- окремий SSH-ключ тільки для CI
-- `.env` ніколи не комітити
-- закрий порт 8080 ззовні (у тебе вже так — тільки Nginx на `:80`)
-- за можливості обмеж SSH firewall-ом лише для GitHub Actions IP або через VPN/bastion
+| Файл / папка | Чому |
+|--------------|------|
+| `GymBeamShiftsControllerX/.env` | секрети, в `.gitignore` |
+| `nginx/.htpasswd` | пароль Nginx, в `.gitignore` |
+| `runtime-data/` | логи, в `.gitignore` |
+
+`appconfig.json` **оновлюється з git** при deploy. Якщо редагуєш його тільки на сервері — зміни можуть перезаписатись. Краще міняти через admin UI або тримати в git.
+
+---
+
+# Troubleshooting
+
+| Проблема | Де дивитись | Рішення |
+|----------|-------------|---------|
+| `Permission denied (publickey)` | GitHub Actions log | перевір `SSH_PRIVATE_KEY`, `authorized_keys`, `SSH_USER` |
+| `environment production not found` | GitHub Actions | створи Environment `production` (B1) |
+| `GymBeamShiftsControllerX/.env not found` | сервер | створи `.env` на сервері |
+| `git pull` failed / auth | сервер | deploy key (C3) або public repo |
+| `docker: permission denied` | сервер | `sudo usermod -aG docker $USER`, relogin |
+| deploy ✅ але бот старий | сервер | `docker compose ps`, `git log -1` |
+| тести падають | GitHub Actions | виправ код, deploy не піде поки test ❌ |
+
+---
+
+# Чеклист «CI/CD повністю працює»
+
+- [ ] Код з `.github/workflows/ci.yml` і `scripts/deploy.sh` у `main` на GitHub
+- [ ] Environment `production` створений у GitHub
+- [ ] 4 Secrets: `SSH_HOST`, `SSH_USER`, `SSH_PRIVATE_KEY`, `DEPLOY_PATH`
+- [ ] `gymbeam_deploy_key.pub` у `~/.ssh/authorized_keys` на сервері
+- [ ] SSH з ПК працює: `ssh -i gymbeam_deploy_key USER@HOST`
+- [ ] `git pull origin main` працює на сервері
+- [ ] `.env` і `nginx/.htpasswd` існують на сервері
+- [ ] `bash scripts/deploy.sh` проходить вручну
+- [ ] Push у `main` → Actions: test ✅ + Deploy to Ubuntu ✅
+- [ ] Бот працює після deploy: `docker compose ps`, admin UI відкривається
+
+Коли всі пункти ✅ — CI/CD працює повністю.
