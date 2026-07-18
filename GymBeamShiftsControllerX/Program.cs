@@ -50,9 +50,8 @@ namespace GymBeamShiftsControllerX
                 Console.WriteLine($"Admin Web failed to start: {ex.Message}");
             }
 
+            InitializeBrowserWithRetry(browserSession, config);
             SendStartupNotification(config, startTime);
-
-            browserSession.InitializeDriver();
 
             while (true)
             {
@@ -74,7 +73,7 @@ namespace GymBeamShiftsControllerX
                     lastErrorMessage = ex.Message;
                     TrySendErrorNotification(config, ex, "WebDriver crash");
                     try { browserSession.Quit(); } catch { }
-                    browserSession.InitializeDriver();
+                    InitializeBrowserWithRetry(browserSession, config);
                 }
                 catch (Exception ex)
                 {
@@ -97,11 +96,40 @@ namespace GymBeamShiftsControllerX
                     {
                     }
 
-                    browserSession.InitializeDriver();
+                    InitializeBrowserWithRetry(browserSession, config);
                     iterationCount = 0;
                 }
 
                 Thread.Sleep(config.Timing.CheckIntervalMinutes * 60 * 1000);
+            }
+        }
+
+        private static void InitializeBrowserWithRetry(BrowserSession browserSession, AppConfig config)
+        {
+            while (true)
+            {
+                try
+                {
+                    browserSession.InitializeDriver();
+                    return;
+                }
+                catch (Exception ex)
+                {
+                    lastErrorAt = DateTime.Now;
+                    lastErrorMessage = ex.Message;
+                    Logger.Log($"Не удалось инициализировать браузер. Повтор через 30 секунд: {ex.Message}");
+                    TrySendErrorNotification(config, ex, "Browser initialization error");
+
+                    try
+                    {
+                        browserSession.Quit();
+                    }
+                    catch
+                    {
+                    }
+
+                    Thread.Sleep(TimeSpan.FromSeconds(30));
+                }
             }
         }
 
