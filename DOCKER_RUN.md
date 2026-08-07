@@ -1,19 +1,30 @@
-## Docker Run
+# Local Docker run
 
-1. Set real secrets in `GymBeamShiftsControllerX/.env`.
-2. Change basic auth credentials:
-   - Linux/macOS: `printf "admin:$(openssl passwd -apr1 'YOUR_PASSWORD')\n" > nginx/.htpasswd`
-   - Windows PowerShell with OpenSSL installed: `echo "admin:$(openssl passwd -apr1 YOUR_PASSWORD)" > nginx/.htpasswd`
-3. Create runtime folder:
-   - `mkdir -p runtime-data`
-4. Start:
-   - `docker compose down`
-   - `docker compose up -d --build`
-5. Open:
-   - `http://SERVER_IP/`
+The Compose stack contains two bot instances and Caddy:
 
-Notes:
-- Bot container is internal-only.
-- Only Nginx is public on port 80.
-- Shift rules/API are available through Nginx with Basic Auth.
-- Logs are written to `runtime-data/app.log`.
+- `gymbeam-bot-1` uses `instances/bot1/`
+- `gymbeam-bot-2` uses `instances/bot2/`
+- Caddy publishes ports 80 and 443
+
+Initialize missing local runtime files from `deploy/examples/`, then provide valid
+credentials in both `.env` files:
+
+```bash
+mkdir -p instances/bot1/runtime-data instances/bot2/runtime-data
+cp deploy/examples/bot.env.example instances/bot1/.env
+cp deploy/examples/bot.env.example instances/bot2/.env
+cp deploy/examples/appconfig.example.json instances/bot1/appconfig.json
+cp deploy/examples/appconfig.example.json instances/bot2/appconfig.json
+```
+
+Validate and build:
+
+```bash
+docker compose config --quiet
+docker compose build gymbeam-bot-1
+```
+
+The production hostnames in `Caddyfile` resolve to the production server, so do
+not start Caddy locally unless DNS or local hosts routing is intentionally set up.
+
+Runtime files under `instances/` are ignored by Git.

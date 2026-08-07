@@ -13,6 +13,7 @@ WORKDIR /app
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     chromium \
+    curl \
     ca-certificates \
     fonts-liberation \
     libnss3 \

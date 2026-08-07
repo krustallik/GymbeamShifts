@@ -1,32 +1,63 @@
-services:
-  gymbeam-bot:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: gymbeam-shifts-bot
-    restart: unless-stopped
-    env_file:
-      - ./GymBeamShiftsControllerX/.env
-    environment:
-      GYMBEAM_ADMIN_HOST: "*"
-      GYMBEAM_ADMIN_PORT: "8080"
-      CHROME_BIN: /usr/bin/chromium
-      GYMBEAM_LOG_PATH: /app/runtime-data/app.log
-    expose:
-      - "8080"
-    volumes:
-      - ./GymBeamShiftsControllerX/appconfig.json:/app/appconfig.json
-      - ./runtime-data:/app/runtime-data
-    mem_limit: 512m
+x-bot-common: &bot-common
+  image: gymbeam-shifts-bot:latest
+  build:
+    context: .
+    dockerfile: Dockerfile
+  restart: unless-stopped
+  init: true
+  environment:
+    GYMBEAM_ADMIN_HOST: "*"
+    GYMBEAM_ADMIN_PORT: "8080"
+    CHROME_BIN: /usr/bin/chromium
+    GYMBEAM_LOG_PATH: /app/runtime-data/app.log
+  expose:
+    - "8080"
+  shm_size: "256mb"
+  mem_limit: 512m
+  healthcheck:
+    test: ["CMD-SHELL", "curl --fail --silent --show-error http://localhost:8080/healthz > /dev/null || exit 1"]
+    interval: 30s
+    timeout: 5s
+    retries: 3
+    start_period: 60s
 
-  nginx:
-    image: nginx:1.27-alpine
-    container_name: gymbeam-nginx
+services:
+  gymbeam-bot-1:
+    <<: *bot-common
+    container_name: gymbeam-shifts-bot-1
+    env_file:
+      - ./instances/bot1/.env
+    volumes:
+      - ./instances/bot1/appconfig.json:/app/appconfig.json
+      - ./instances/bot1/runtime-data:/app/runtime-data
+
+  gymbeam-bot-2:
+    <<: *bot-common
+    container_name: gymbeam-shifts-bot-2
+    env_file:
+      - ./instances/bot2/.env
+    volumes:
+      - ./instances/bot2/appconfig.json:/app/appconfig.json
+      - ./instances/bot2/runtime-data:/app/runtime-data
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: gymbeam-caddy
     restart: unless-stopped
     depends_on:
-      - gymbeam-bot
+      gymbeam-bot-1:
+        condition: service_healthy
+      gymbeam-bot-2:
+        condition: service_healthy
     ports:
       - "80:80"
+      - "443:443"
+      - "443:443/udp"
     volumes:
-      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
-      - ./nginx/.htpasswd:/etc/nginx/.htpasswd:ro
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  caddy_data:
+  caddy_config:

@@ -155,6 +155,12 @@ namespace GymBeamShiftsControllerX.Services
             string path = context.Request.Url?.AbsolutePath ?? "/";
             string method = context.Request.HttpMethod.ToUpperInvariant();
 
+            if (method == "GET" && path == "/healthz")
+            {
+                WriteJson(context.Response, 200, new { status = "ok" });
+                return;
+            }
+
             if (method == "GET" && path == "/")
             {
                 WriteHtml(context.Response, BuildAdminHtml());
@@ -169,7 +175,7 @@ namespace GymBeamShiftsControllerX.Services
 
             if (method == "POST" && path == "/api/logout")
             {
-                ExpireSessionCookie(context.Response);
+                ExpireSessionCookie(context);
                 WriteJson(context.Response, 200, new { ok = true });
                 return;
             }
@@ -236,7 +242,7 @@ namespace GymBeamShiftsControllerX.Services
             }
 
             string token = CreateSignedToken(username ?? string.Empty);
-            SetSessionCookie(context.Response, token);
+            SetSessionCookie(context, token);
             WriteJson(context.Response, 200, new { ok = true });
         }
 
@@ -279,6 +285,22 @@ namespace GymBeamShiftsControllerX.Services
 
         private static string GetClientIp(HttpListenerRequest request)
         {
+            string? forwardedFor = request.Headers["X-Forwarded-For"];
+            if (!string.IsNullOrWhiteSpace(forwardedFor))
+            {
+                string firstAddress = forwardedFor.Split(',')[0].Trim();
+                if (!string.IsNullOrWhiteSpace(firstAddress))
+                {
+                    return firstAddress;
+                }
+            }
+
+            string? realIp = request.Headers["X-Real-IP"];
+            if (!string.IsNullOrWhiteSpace(realIp))
+            {
+                return realIp.Trim();
+            }
+
             return request.RemoteEndPoint?.Address.ToString() ?? "unknown";
         }
 
@@ -334,24 +356,41 @@ namespace GymBeamShiftsControllerX.Services
             return TryValidateToken(cookie.Value, out _);
         }
 
-        private static void SetSessionCookie(HttpListenerResponse response, string token)
+        private static void SetSessionCookie(HttpListenerContext context, string token)
         {
-            response.Cookies.Add(new Cookie(SessionCookieName, token)
-            {
-                HttpOnly = true,
-                Path = "/",
-                Expires = DateTime.Now.AddDays(SessionLifetimeDays)
-            });
+            AppendSessionCookieHeader(
+                context,
+                token,
+                DateTime.UtcNow.AddDays(SessionLifetimeDays),
+                maxAgeSeconds: SessionLifetimeDays * 24 * 60 * 60);
         }
 
-        private static void ExpireSessionCookie(HttpListenerResponse response)
+        private static void ExpireSessionCookie(HttpListenerContext context)
         {
-            response.Cookies.Add(new Cookie(SessionCookieName, string.Empty)
+            AppendSessionCookieHeader(context, string.Empty, DateTime.UnixEpoch, maxAgeSeconds: 0);
+        }
+
+        private static void AppendSessionCookieHeader(
+            HttpListenerContext context,
+            string value,
+            DateTime expiresUtc,
+            int maxAgeSeconds)
+        {
+            string header =
+                $"{SessionCookieName}={value}; Path=/; Expires={expiresUtc:R}; Max-Age={maxAgeSeconds}; HttpOnly; SameSite=Strict";
+
+            if (IsHttpsRequest(context.Request))
             {
-                HttpOnly = true,
-                Path = "/",
-                Expires = DateTime.Now.AddDays(-1)
-            });
+                header += "; Secure";
+            }
+
+            context.Response.AppendHeader("Set-Cookie", header);
+        }
+
+        private static bool IsHttpsRequest(HttpListenerRequest request)
+        {
+            return request.IsSecureConnection
+                || string.Equals(request.Headers["X-Forwarded-Proto"], "https", StringComparison.OrdinalIgnoreCase);
         }
 
         private static string ReadRequestBody(HttpListenerRequest request)

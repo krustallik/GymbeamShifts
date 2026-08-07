@@ -98,6 +98,34 @@ public class AdminWebServerIntegrationTests : IDisposable
     }
 
     [Fact]
+    public async Task Healthz_DoesNotRequireAuthentication()
+    {
+        var response = await _client.GetAsync("/healthz");
+        var json = await response.Content.ReadAsStringAsync();
+        using var document = JsonDocument.Parse(json);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal("ok", document.RootElement.GetProperty("status").GetString());
+    }
+
+    [Fact]
+    public async Task Login_ThroughHttpsProxy_SetsSecureSessionCookie()
+    {
+        var payload = JsonSerializer.Serialize(new { username = "testadmin", password = "testpass" });
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/api/login")
+        {
+            Content = new StringContent(payload, Encoding.UTF8, "application/json")
+        };
+        request.Headers.Add("X-Forwarded-Proto", "https");
+
+        var response = await _client.SendAsync(request);
+        string setCookie = string.Join(";", response.Headers.GetValues("Set-Cookie"));
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Contains("secure", setCookie, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public async Task Login_WithValidCredentials_ReturnsSessionCookie()
     {
         var response = await LoginAsync("testadmin", "testpass");

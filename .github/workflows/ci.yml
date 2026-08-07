@@ -33,6 +33,27 @@ jobs:
       - name: Test
         run: dotnet test GymBeamShiftsController.sln --configuration Release --no-build --verbosity normal
 
+      - name: Prepare deployment fixtures
+        run: |
+          mkdir -p instances/bot1/runtime-data instances/bot2/runtime-data
+          cp deploy/examples/bot.env.example instances/bot1/.env
+          cp deploy/examples/bot.env.example instances/bot2/.env
+          cp deploy/examples/appconfig.example.json instances/bot1/appconfig.json
+          cp deploy/examples/appconfig.example.json instances/bot2/appconfig.json
+
+      - name: Validate Docker Compose
+        run: docker compose config --quiet
+
+      - name: Build Docker image
+        run: docker compose build gymbeam-bot-1
+
+      - name: Validate Caddy configuration
+        run: |
+          docker run --rm \
+            -v "$PWD/Caddyfile:/etc/caddy/Caddyfile:ro" \
+            caddy:2-alpine \
+            caddy validate --config /etc/caddy/Caddyfile
+
   deploy:
     name: Deploy to Ubuntu
     runs-on: ubuntu-latest

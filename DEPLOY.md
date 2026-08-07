@@ -1,347 +1,238 @@
-# CI/CD: повна інструкція (GitHub Actions → Ubuntu)
+# CI/CD і розгортання двох ботів
 
-Репозиторій: `https://github.com/krustallik/GymbeamShifts`
+## Цільова схема
 
-## Що відбувається автоматично
+Один Docker-образ запускається у двох ізольованих контейнерах:
 
-```
-Push у main (з твого ПК)
-        ↓
-GitHub Actions: dotnet test (85 тестів)
-        ↓ (якщо ✅)
-GitHub Actions: SSH на Ubuntu-сервер
-        ↓
-scripts/deploy.sh → git pull + docker compose up -d --build
+```text
+https://bot1.mapa-svietidiel.sk -> gymbeam-bot-1:8080
+https://bot2.mapa-svietidiel.sk -> gymbeam-bot-2:8080
 ```
 
-**Pull request** → тільки тести, без deploy.  
-**Push у main** → тести + deploy.
+Кожен бот має власні `.env`, `appconfig.json`, лог, GymBeam-акаунт,
+Telegram-параметри й адміністратора. Caddy автоматично отримує та поновлює
+HTTPS-сертифікати. Додаткова Basic Auth перед адмінкою не використовується.
 
----
+## DNS
 
-## Де що робиться (швидка таблиця)
+У Websupport уже налаштовано wildcard A-запис:
 
-| Крок | Де | Скільки разів |
-|------|-----|---------------|
-| Код, тести, workflow | ПК → git push | постійно |
-| GitHub Secrets | GitHub.com (браузер) | 1 раз |
-| Environment `production` | GitHub.com (браузер) | 1 раз |
-| SSH-ключ для Actions | ПК (генерація) | 1 раз |
-| Публічний ключ у `authorized_keys` | **Сервер** | 1 раз |
-| `git pull` доступ (deploy key) | **Сервер** + GitHub | 1 раз (якщо repo private) |
-| `.env`, htpasswd, runtime-data | **Сервер** | 1 раз (вже є, якщо бот працює) |
-| Оновлення до нової версії | **Сервер** | 1 раз зараз, далі автоматично |
-| Щоденна робота | ПК: `git push` | кожна зміна |
-
----
-
-# ЧАСТИНА A — На ПК (Windows)
-
-## A1. Переконайся, що CI/CD файли в git
-
-У репозиторії мають бути:
-
-- `.github/workflows/ci.yml`
-- `scripts/deploy.sh`
-- `GymBeamShiftsController.sln` + тести
-
-Якщо зміни ще не на GitHub:
-
-```powershell
-cd D:\Gymbeam\GymBeamShiftsController
-git status
-git push origin main
+```text
+*.mapa-svietidiel.sk -> 84.247.182.209
 ```
 
-## A2. Згенеруй SSH-ключ для GitHub Actions
-
-**На ПК** (PowerShell або Git Bash):
-
-```powershell
-ssh-keygen -t ed25519 -C "github-actions-gymbeam" -f $env:USERPROFILE\.ssh\gymbeam_deploy_key_v2 -N '""'
-```
-
-З'являться 2 файли (зберігай **поза репозиторієм**, наприклад у `C:\Users\wowan\.ssh\`):
-
-- `gymbeam_deploy_key_v2` — **приватний** → піде в GitHub Secret
-- `gymbeam_deploy_key_v2.pub` — **публічний** → піде на сервер
-
-⚠️ **Ніколи** не роби `git add` для цих файлів. Вони в `.gitignore`.
-
----
-
-# ЧАСТИНА B — GitHub (браузер)
-
-Відкрий: `https://github.com/krustallik/GymbeamShifts`
-
-## B1. Створи Environment `production`
-
-1. **Settings → Environments → New environment**
-2. Name: `production`
-3. (Опційно) **Required reviewers** — якщо хочеш підтверджувати deploy вручну
-4. **Save protection rules**
-
-> Без цього job `deploy` може падати з помилкою про environment.
-
-## B2. Додай Secrets
-
-**Settings → Secrets and variables → Actions → New repository secret**
-
-| Secret | Що вставити | Приклад |
-|--------|-------------|---------|
-| `SSH_HOST` | IP або домен сервера | `203.0.113.10` |
-| `SSH_USER` | Linux-користувач для SSH | `root` або `deploy` |
-| `SSH_PRIVATE_KEY` | **Весь** вміст файлу `gymbeam_deploy_key` | `-----BEGIN OPENSSH PRIVATE KEY-----...` |
-| `DEPLOY_PATH` | Шлях до проекту на сервері (де `docker-compose.yml`) | `/home/user/GymbeamShifts` |
-
-`DEPLOY_PATH` дізнаєшся на сервері командою `pwd` у папці проекту.
-
----
-
-# ЧАСТИНА C — На Ubuntu-сервері
-
-Підключись:
+Тому окремі записи для `bot1` і `bot2` не обов'язкові. Перед запуском перевір:
 
 ```bash
-ssh YOUR_USER@YOUR_SERVER_IP
-cd /шлях/до/проекту    # тут має бути docker-compose.yml
-pwd                     # цей шлях → DEPLOY_PATH у GitHub
+dig +short bot1.mapa-svietidiel.sk
+dig +short bot2.mapa-svietidiel.sk
 ```
 
-## C1. Якщо проект УЖЕ запущений (твій випадок)
+Обидві команди мають повернути `84.247.182.209`. Не змінюй наявні записи
+`admin`, `mail`, `webmail`, `smtp`, `pop3`, `imap`.
 
-### Backup (рекомендовано)
+## Вимоги до сервера
+
+- Ubuntu з Docker Engine і Docker Compose v2
+- відкриті TCP-порти 22, 80, 443
+- бажано щонайменше 4 GB RAM для двох Chromium-процесів
+- репозиторій уже клонований у каталог із `docker-compose.yml`
 
 ```bash
-cd /шлях/до/проекту
-cp GymBeamShiftsControllerX/.env ~/.env.backup
-cp GymBeamShiftsControllerX/appconfig.json ~/appconfig.backup
-cp nginx/.htpasswd ~/.htpasswd.backup
+sudo ufw allow 22/tcp
+sudo ufw allow 80/tcp
+sudo ufw allow 443/tcp
+sudo ufw status
 ```
 
-### Перевір git
+Не відкривай порт 8080 назовні.
+
+## Підготовка сервера перед першим push нової схеми
+
+Цей етап виконай до push у `main`, щоб перший автоматичний deploy уже знайшов
+обидва набори конфігурації.
 
 ```bash
-git status
-git remote -v
+cd /шлях/із/секрету/DEPLOY_PATH
+mkdir -p instances/bot1/runtime-data instances/bot2/runtime-data backups
 ```
 
-Має бути remote `origin` → `github.com/krustallik/GymbeamShifts`.
-
-### Онови код до актуальної версії (вручну, один раз)
+Збережи резервну копію поточного одиночного бота:
 
 ```bash
-git fetch origin main
-git pull origin main
+BACKUP_DIR="$HOME/gymbeam-before-two-bots-$(date -u +%Y%m%dT%H%M%SZ)"
+mkdir -m 700 "$BACKUP_DIR"
+cp GymBeamShiftsControllerX/.env "$BACKUP_DIR/bot1.env"
+cp GymBeamShiftsControllerX/appconfig.json "$BACKUP_DIR/bot1.appconfig.json"
+cp -a runtime-data "$BACKUP_DIR/runtime-data"
+chmod 600 "$BACKUP_DIR/bot1.env" "$BACKUP_DIR/bot1.appconfig.json"
 ```
 
-Перевір, що в `GymBeamShiftsControllerX/appconfig.json` є:
-
-```json
-"FavoriteShiftUsers": []
-```
-
-Додай улюблених ведучих (якщо потрібно):
-
-```json
-"FavoriteShiftUsers": [
-  "Andrea Pavlíková"
-]
-```
-
-### Перезапусти контейнер
+Перенеси чинні налаштування у bot1:
 
 ```bash
-docker compose up -d --build
-docker compose ps
-tail -n 30 runtime-data/app.log
+cp GymBeamShiftsControllerX/.env instances/bot1/.env
+cp GymBeamShiftsControllerX/appconfig.json instances/bot1/appconfig.json
 ```
 
-Перевір адмінку: `http://YOUR_SERVER_IP/`
-
----
-
-## C2. Дозволь GitHub Actions заходити по SSH
-
-На сервері під тим же user, що в `SSH_USER`:
+Підготуй bot2 на основі тих самих файлів:
 
 ```bash
-mkdir -p ~/.ssh
-chmod 700 ~/.ssh
-nano ~/.ssh/authorized_keys
+cp GymBeamShiftsControllerX/.env instances/bot2/.env
+cp GymBeamShiftsControllerX/appconfig.json instances/bot2/appconfig.json
+nano instances/bot2/.env
 ```
 
-Встав **одним рядком** вміст `gymbeam_deploy_key.pub` (з ПК), збережи.
+У `instances/bot2/.env` заміни всі значення другого бота. Обов'язкові поля:
+
+```dotenv
+GYMBEAM_AUTH_LOGIN=
+GYMBEAM_AUTH_PASSWORD=
+GYMBEAM_TELEGRAM_BOT_TOKEN=
+GYMBEAM_TELEGRAM_CHAT_ID=
+GYMBEAM_ADMIN_USER=
+GYMBEAM_ADMIN_PASSWORD=
+GYMBEAM_ADMIN_TOKEN_SECRET=
+GYMBEAM_ADMIN_PORT=8080
+GYMBEAM_ADMIN_HOST=*
+```
+
+Створи новий секрет сесії для bot2:
 
 ```bash
-chmod 600 ~/.ssh/authorized_keys
+openssl rand -hex 32
 ```
 
-### Перевір з ПК
+Bot1 і bot2 повинні мати різні `GYMBEAM_ADMIN_TOKEN_SECRET`. За потреби також
+онови секрет bot1 новим випадковим значенням.
 
-```powershell
-ssh -i gymbeam_deploy_key YOUR_USER@YOUR_SERVER_IP "cd /шлях/до/проекту && git status"
-```
-
-Якщо заходить без пароля — OK.
-
----
-
-## C3. Якщо репозиторій PRIVATE — deploy key для git pull
-
-GitHub Actions заходить по SSH, але **`git pull` на сервері** теж потребує доступу до GitHub.
-
-### На сервері
+Захисти файли:
 
 ```bash
-ssh-keygen -t ed25519 -f ~/.ssh/github_deploy -N ""
-cat ~/.ssh/github_deploy.pub
+chmod 600 instances/bot1/.env instances/bot1/appconfig.json
+chmod 600 instances/bot2/.env instances/bot2/appconfig.json
 ```
 
-### У GitHub
-
-**Settings → Deploy keys → Add deploy key**
-
-- Title: `ubuntu-server`
-- Key: вміст `github_deploy.pub`
-- ✅ Allow read-only access
-
-### На сервері — налаштуй git
+Якщо чинний `appconfig.json` змінювався через веб і Git показує його як modified,
+після копіювання в `instances/bot1` поверни лише tracked-копію:
 
 ```bash
-cd /шлях/до/проекту
-git remote set-url origin git@github.com:krustallik/GymbeamShifts.git
-git pull origin main
+git restore GymBeamShiftsControllerX/appconfig.json
 ```
 
-Якщо питає fingerprint — підтверди.
+Реальний bot1-конфіг уже збережений у `instances/bot1/appconfig.json`.
 
-> Якщо repo **public**, deploy key не обов'язковий — `git pull` через HTTPS теж працює.
+## GitHub Actions
 
----
+Workflow `.github/workflows/ci.yml` виконує:
 
-## C4. Перевір, що deploy-скрипт працює
+1. restore, build і всі .NET-тести;
+2. підготовку безпечних тимчасових deployment-файлів;
+3. `docker compose config --quiet`;
+4. збірку Docker-образу;
+5. валідацію Caddyfile;
+6. SSH deploy після push у `main`.
+
+У GitHub Environment `production` потрібні секрети:
+
+| Secret | Значення |
+|---|---|
+| `SSH_HOST` | `84.247.182.209` |
+| `SSH_USER` | користувач Ubuntu для deploy |
+| `SSH_PRIVATE_KEY` | приватний SSH-ключ GitHub Actions |
+| `DEPLOY_PATH` | каталог репозиторію на сервері |
+
+Секрети ботів у GitHub додавати не потрібно: вони залишаються тільки на сервері.
+
+## Що робить deploy-скрипт
+
+`scripts/deploy.sh`:
+
+1. отримує `main` через fast-forward pull;
+2. перевіряє файли та сім обов'язкових змінних кожного бота;
+3. створює timestamped backup обох `.env` і JSON у `backups/`;
+4. перевіряє Compose;
+5. один раз збирає спільний образ;
+6. під час першої міграції видаляє старі `gymbeam-shifts-bot` і `gymbeam-nginx`;
+7. послідовно оновлює bot1 і bot2 та чекає стану `healthy`;
+8. запускає Caddy;
+9. перевіряє обидва `/healthz` через HTTPS;
+10. лише після успіху очищає невикористані образи.
+
+## Перший запуск
+
+Після підготовки server-local файлів зроби push у `main` і стеж за GitHub
+Actions. Також deploy можна перевірити вручну:
 
 ```bash
-cd /шлях/до/проекту
+cd /шлях/із/секрету/DEPLOY_PATH
 bash scripts/deploy.sh
 ```
 
-Очікуваний результат:
-
-- `git pull` без помилок
-- `docker compose up -d --build`
-- `Deploy finished successfully.`
-
-Якщо помилка `.env not found` — файл має бути тут:
-
-```
-/шлях/до/проекту/GymBeamShiftsControllerX/.env
-```
-
-Якщо помилка `.htpasswd not found`:
+Перевір контейнери:
 
 ```bash
-printf "admin:$(openssl passwd -apr1 'YOUR_PASSWORD')\n" > nginx/.htpasswd
-```
-
----
-
-# ЧАСТИНА D — Перший автоматичний deploy
-
-## D1. Запуск
-
-**Варіант 1** — push з ПК:
-
-```powershell
-git commit --allow-empty -m "Trigger CI/CD deploy"
-git push origin main
-```
-
-**Варіант 2** — вручну в GitHub:
-
-**Actions → CI → Run workflow → Run workflow**
-
-> `Run workflow` запускає тести. Deploy автоматично піде тільки якщо це push у `main` (не workflow_dispatch для deploy job — deploy прив'язаний до push).  
-> Тому для першого deploy краще зробити push.
-
-## D2. Перевір в GitHub
-
-**Actions → останній workflow run**
-
-Має бути:
-
-1. ✅ **test** (~85 tests passed)
-2. ✅ **Deploy to Ubuntu**
-
-## D3. Перевір на сервері
-
-```bash
-cd /шлях/до/проекту
-git log -1 --oneline
 docker compose ps
-tail -n 20 runtime-data/app.log
+docker compose logs --tail=100 gymbeam-bot-1
+docker compose logs --tail=100 gymbeam-bot-2
+docker compose logs --tail=100 caddy
 ```
 
----
+Перевір HTTPS:
 
-# Щоденна робота (після налаштування)
-
-Тільки на **ПК**:
-
-```powershell
-# змінив код
-git add .
-git commit -m "опис змін"
-git push origin main
+```bash
+curl -fsS https://bot1.mapa-svietidiel.sk/healthz
+curl -fsS https://bot2.mapa-svietidiel.sk/healthz
 ```
 
-GitHub сам:
+Очікувана відповідь:
 
-1. прогонить тести
-2. задеплоїть на сервер
+```json
+{"status":"ok"}
+```
 
-**На сервер заходити не потрібно**, якщо все налаштовано.
+Після цього відкрий:
 
----
+- `https://bot1.mapa-svietidiel.sk`
+- `https://bot2.mapa-svietidiel.sk`
 
-# Що НЕ їде через CI/CD (залишається на сервері)
+Перевір, що кожен логін працює лише у своїй адмінці, налаштування різні, а
+повідомлення надходять у правильні Telegram-чати.
 
-| Файл / папка | Чому |
-|--------------|------|
-| `GymBeamShiftsControllerX/.env` | секрети, в `.gitignore` |
-| `nginx/.htpasswd` | пароль Nginx, в `.gitignore` |
-| `runtime-data/` | логи, в `.gitignore` |
+## Щоденна експлуатація
 
-`appconfig.json` **оновлюється з git** при deploy. Якщо редагуєш його тільки на сервері — зміни можуть перезаписатись. Краще міняти через admin UI або тримати в git.
+Логи:
 
----
+```bash
+tail -f instances/bot1/runtime-data/app.log
+tail -f instances/bot2/runtime-data/app.log
+```
 
-# Troubleshooting
+Перезапуск одного бота:
 
-| Проблема | Де дивитись | Рішення |
-|----------|-------------|---------|
-| `Permission denied (publickey)` | GitHub Actions log | перевір `SSH_PRIVATE_KEY`, `authorized_keys`, `SSH_USER` |
-| `environment production not found` | GitHub Actions | створи Environment `production` (B1) |
-| `GymBeamShiftsControllerX/.env not found` | сервер | створи `.env` на сервері |
-| `git pull` failed / auth | сервер | deploy key (C3) або public repo |
-| `docker: permission denied` | сервер | `sudo usermod -aG docker $USER`, relogin |
-| deploy ✅ але бот старий | сервер | `docker compose ps`, `git log -1` |
-| тести падають | GitHub Actions | виправ код, deploy не піде поки test ❌ |
+```bash
+docker compose restart gymbeam-bot-1
+docker compose restart gymbeam-bot-2
+```
 
----
+Стан ресурсів:
 
-# Чеклист «CI/CD повністю працює»
+```bash
+docker stats
+free -h
+df -h
+```
 
-- [ ] Код з `.github/workflows/ci.yml` і `scripts/deploy.sh` у `main` на GitHub
-- [ ] Environment `production` створений у GitHub
-- [ ] 4 Secrets: `SSH_HOST`, `SSH_USER`, `SSH_PRIVATE_KEY`, `DEPLOY_PATH`
-- [ ] `gymbeam_deploy_key.pub` у `~/.ssh/authorized_keys` на сервері
-- [ ] SSH з ПК працює: `ssh -i gymbeam_deploy_key USER@HOST`
-- [ ] `git pull origin main` працює на сервері
-- [ ] `.env` і `nginx/.htpasswd` існують на сервері
-- [ ] `bash scripts/deploy.sh` проходить вручну
-- [ ] Push у `main` → Actions: test ✅ + Deploy to Ubuntu ✅
-- [ ] Бот працює після deploy: `docker compose ps`, admin UI відкривається
+Налаштування, змінені через кожну вебадмінку, записуються у відповідний
+`instances/botN/appconfig.json` і не перезаписуються наступним deploy.
 
-Коли всі пункти ✅ — CI/CD працює повністю.
+## Відновлення конфігурації
+
+Переглянь резервні копії:
+
+```bash
+ls -la backups
+```
+
+Перед відновленням зупини потрібний контейнер, скопіюй його `.env` і JSON із
+обраного backup та запусти контейнер знову.

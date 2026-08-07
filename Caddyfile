@@ -1,0 +1,23 @@
+bot1.mapa-svietidiel.sk {
+	encode zstd gzip
+
+	header {
+		-Server
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "no-referrer"
+	}
+
+	reverse_proxy gymbeam-bot-1:8080
+}
+
+bot2.mapa-svietidiel.sk {
+	encode zstd gzip
+
+	header {
+		-Server
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "no-referrer"
+	}
+
+	reverse_proxy gymbeam-bot-2:8080
+}

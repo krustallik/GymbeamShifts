@@ -1,8 +1,13 @@
 .git
 .gitignore
+.github
 **/bin
 **/obj
 **/.vs
 **/.idea
 **/.env
+GymBeamShiftsControllerX.Tests
+packages
 runtime-data
+instances
+backups
