@@ -112,6 +112,7 @@ for service in "${BOT_SERVICES[@]}"; do
 done
 
 docker compose up -d --remove-orphans caddy
+docker compose exec -T caddy caddy reload --config /etc/caddy/Caddyfile
 
 curl --fail --silent --show-error --retry 12 --retry-delay 5 --retry-all-errors \
   https://bot1.mapa-svietidiel.sk/healthz >/dev/null

@@ -25,6 +25,7 @@ public class DeploymentConfigurationTests
     {
         string caddyfile = ReadRootFile("Caddyfile");
 
+        Assert.Contains("auto_https disable_redirects", caddyfile);
         Assert.Contains("http://84.247.182.209", caddyfile);
         Assert.Contains("respond 404", caddyfile);
         Assert.Contains("bot1.mapa-svietidiel.sk", caddyfile);
@@ -41,6 +42,14 @@ public class DeploymentConfigurationTests
         Assert.Contains("instances/*/.env", gitIgnore);
         Assert.Contains("instances/*/appconfig.json", gitIgnore);
         Assert.Contains("instances/*/runtime-data/", gitIgnore);
+    }
+
+    [Fact]
+    public void DeployScript_ReloadsCaddyAfterConfigurationChanges()
+    {
+        string deployScript = ReadRootFile(Path.Combine("scripts", "deploy.sh"));
+
+        Assert.Contains("caddy reload --config /etc/caddy/Caddyfile", deployScript);
     }
 
     private static string ReadRootFile(string name)
