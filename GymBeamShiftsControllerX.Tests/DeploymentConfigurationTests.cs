@@ -25,6 +25,8 @@ public class DeploymentConfigurationTests
     {
         string caddyfile = ReadRootFile("Caddyfile");
 
+        Assert.Contains("http://84.247.182.209", caddyfile);
+        Assert.Contains("respond 404", caddyfile);
         Assert.Contains("bot1.mapa-svietidiel.sk", caddyfile);
         Assert.Contains("reverse_proxy gymbeam-bot-1:8080", caddyfile);
         Assert.Contains("bot2.mapa-svietidiel.sk", caddyfile);

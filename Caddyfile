@@ -1,3 +1,7 @@
+http://84.247.182.209 {
+	respond 404
+}
+
 bot1.mapa-svietidiel.sk {
 	encode zstd gzip
 
