@@ -36,8 +36,11 @@ namespace GymBeamShiftsControllerX.Models
     {
         public int CheckIntervalMinutes { get; set; } = 2;
         public int ShiftMinHoursAhead { get; set; } = 48;
+        public int WeekendOrHolidayMinHoursAhead { get; set; } = 28;
         public int DriverRestartAfterIterations { get; set; } = 100;
         public int TelegramDelayMilliseconds { get; set; } = 1000;
+        public int ImportantShiftNotificationCount { get; set; } = 4;
+        public int ImportantShiftNotificationDelayMilliseconds { get; set; } = 30000;
     }
 
     public class ShiftRulesSettings

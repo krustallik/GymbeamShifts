@@ -14,6 +14,9 @@ public class AppConfigDefaultsTests
         Assert.Equal("1920,1080", cfg.Browser.WindowSize);
         Assert.Equal(2, cfg.Timing.CheckIntervalMinutes);
         Assert.Equal(48, cfg.Timing.ShiftMinHoursAhead);
+        Assert.Equal(28, cfg.Timing.WeekendOrHolidayMinHoursAhead);
+        Assert.Equal(4, cfg.Timing.ImportantShiftNotificationCount);
+        Assert.Equal(30000, cfg.Timing.ImportantShiftNotificationDelayMilliseconds);
         Assert.Contains("Monday", cfg.ShiftRules.IncludedWeekdays);
         Assert.Contains("Friday", cfg.ShiftRules.IncludedWeekdays);
         Assert.Empty(cfg.ShiftRules.FavoriteShiftUsers);

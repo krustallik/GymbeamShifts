@@ -118,6 +118,28 @@ public class AdminWebServerPrivateLogicTests
     }
 
     [Theory]
+    [InlineData(0, 1)]
+    [InlineData(21, 20)]
+    [InlineData(4, 4)]
+    public void NormalizeImportantShiftNotificationCount_ClampsToExpectedRange(int input, int expected)
+    {
+        var method = GetStaticMethod("NormalizeImportantShiftNotificationCount");
+        var result = (int)method.Invoke(null, new object[] { input })!;
+        Assert.Equal(expected, result);
+    }
+
+    [Theory]
+    [InlineData(-1, 0)]
+    [InlineData(700000, 600000)]
+    [InlineData(30000, 30000)]
+    public void NormalizeImportantShiftNotificationDelay_ClampsToExpectedRange(int input, int expected)
+    {
+        var method = GetStaticMethod("NormalizeImportantShiftNotificationDelayMilliseconds");
+        var result = (int)method.Invoke(null, new object[] { input })!;
+        Assert.Equal(expected, result);
+    }
+
+    [Theory]
     [InlineData(null, 200, 200)]
     [InlineData("abc", 200, 200)]
     [InlineData("0", 200, 1)]
@@ -210,7 +232,13 @@ public class AdminWebServerPrivateLogicTests
     {
         var cfg = new AppConfig
         {
-            Timing = new TimingSettings { ShiftMinHoursAhead = 55 },
+            Timing = new TimingSettings
+            {
+                ShiftMinHoursAhead = 55,
+                WeekendOrHolidayMinHoursAhead = 24,
+                ImportantShiftNotificationCount = 6,
+                ImportantShiftNotificationDelayMilliseconds = 45000
+            },
             ShiftRules = new ShiftRulesSettings
             {
                 IncludedWeekdays = new List<string> { "Monday" },
@@ -223,6 +251,9 @@ public class AdminWebServerPrivateLogicTests
         var response = (ShiftRulesApiResponse)method.Invoke(server, null)!;
 
         Assert.Equal(55, response.ShiftMinHoursAhead);
+        Assert.Equal(24, response.WeekendOrHolidayMinHoursAhead);
+        Assert.Equal(6, response.ImportantShiftNotificationCount);
+        Assert.Equal(45000, response.ImportantShiftNotificationDelayMilliseconds);
         Assert.Equal(new[] { "Andrea Pavlíková" }, response.FavoriteShiftUsers);
     }
 

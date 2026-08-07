@@ -56,7 +56,13 @@ public class AdminWebServerIntegrationTests : IDisposable
         {
             Auth = new AuthSettings { Login = "x", Password = "y", LoginUrl = "https://example.com" },
             Telegram = new TelegramSettings { BotToken = "token", ChatId = "chat" },
-            Timing = new TimingSettings { ShiftMinHoursAhead = 48 },
+            Timing = new TimingSettings
+            {
+                ShiftMinHoursAhead = 48,
+                WeekendOrHolidayMinHoursAhead = 28,
+                ImportantShiftNotificationCount = 4,
+                ImportantShiftNotificationDelayMilliseconds = 30000
+            },
             ShiftRules = new ShiftRulesSettings
             {
                 IncludedWeekdays = new List<string> { "Monday" },
@@ -86,6 +92,9 @@ public class AdminWebServerIntegrationTests : IDisposable
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Contains("GymBeam Bot Admin", body);
+        Assert.Contains("weekendOrHolidayMinHoursAhead", body);
+        Assert.Contains("importantShiftNotificationCount", body);
+        Assert.Contains("importantShiftNotificationDelayMilliseconds", body);
     }
 
     [Fact]
@@ -148,6 +157,9 @@ public class AdminWebServerIntegrationTests : IDisposable
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Equal(48, document.RootElement.GetProperty("shiftMinHoursAhead").GetInt32());
+        Assert.Equal(28, document.RootElement.GetProperty("weekendOrHolidayMinHoursAhead").GetInt32());
+        Assert.Equal(4, document.RootElement.GetProperty("importantShiftNotificationCount").GetInt32());
+        Assert.Equal(30000, document.RootElement.GetProperty("importantShiftNotificationDelayMilliseconds").GetInt32());
         Assert.Equal("Andrea Pavlíková", document.RootElement.GetProperty("favoriteShiftUsers")[0].GetString());
     }
 
@@ -159,6 +171,9 @@ public class AdminWebServerIntegrationTests : IDisposable
         var payload = """
         {
           "shiftMinHoursAhead": 72,
+          "weekendOrHolidayMinHoursAhead": 24,
+          "importantShiftNotificationCount": 6,
+          "importantShiftNotificationDelayMilliseconds": 45000,
           "includedWeekdays": ["Friday"],
           "startTimesToSkip": ["21:45"],
           "holidays": ["2026-05-08"],
@@ -177,12 +192,18 @@ public class AdminWebServerIntegrationTests : IDisposable
         using var document = JsonDocument.Parse(json);
 
         Assert.Equal(72, document.RootElement.GetProperty("shiftMinHoursAhead").GetInt32());
+        Assert.Equal(24, document.RootElement.GetProperty("weekendOrHolidayMinHoursAhead").GetInt32());
+        Assert.Equal(6, document.RootElement.GetProperty("importantShiftNotificationCount").GetInt32());
+        Assert.Equal(45000, document.RootElement.GetProperty("importantShiftNotificationDelayMilliseconds").GetInt32());
         Assert.Equal("Friday", document.RootElement.GetProperty("includedWeekdays")[0].GetString());
         Assert.Equal("Lukáš Fialek", document.RootElement.GetProperty("favoriteShiftUsers")[0].GetString());
 
         var saved = await File.ReadAllTextAsync(_configPath);
         using var savedJson = JsonDocument.Parse(saved);
         Assert.Equal(72, savedJson.RootElement.GetProperty("Timing").GetProperty("ShiftMinHoursAhead").GetInt32());
+        Assert.Equal(24, savedJson.RootElement.GetProperty("Timing").GetProperty("WeekendOrHolidayMinHoursAhead").GetInt32());
+        Assert.Equal(6, savedJson.RootElement.GetProperty("Timing").GetProperty("ImportantShiftNotificationCount").GetInt32());
+        Assert.Equal(45000, savedJson.RootElement.GetProperty("Timing").GetProperty("ImportantShiftNotificationDelayMilliseconds").GetInt32());
         Assert.Equal("Lukáš Fialek", savedJson.RootElement.GetProperty("ShiftRules").GetProperty("FavoriteShiftUsers")[0].GetString());
     }
 
@@ -306,7 +327,10 @@ public class AdminWebServerIntegrationTests : IDisposable
           },
           "Timing": {
             "CheckIntervalMinutes": 2,
-            "ShiftMinHoursAhead": 48
+            "ShiftMinHoursAhead": 48,
+            "WeekendOrHolidayMinHoursAhead": 28,
+            "ImportantShiftNotificationCount": 4,
+            "ImportantShiftNotificationDelayMilliseconds": 30000
           },
           "ShiftRules": {
             "IncludedWeekdays": ["Monday"],

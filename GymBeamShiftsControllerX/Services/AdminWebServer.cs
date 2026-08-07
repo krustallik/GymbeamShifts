@@ -31,6 +31,9 @@ namespace GymBeamShiftsControllerX.Services
         public List<string> ExcludedDates { get; set; } = new List<string>();
         public List<string> FavoriteShiftUsers { get; set; } = new List<string>();
         public int ShiftMinHoursAhead { get; set; } = 48;
+        public int WeekendOrHolidayMinHoursAhead { get; set; } = 28;
+        public int ImportantShiftNotificationCount { get; set; } = 4;
+        public int ImportantShiftNotificationDelayMilliseconds { get; set; } = 30000;
     }
 
     public class ShiftRulesApiResponse
@@ -41,6 +44,9 @@ namespace GymBeamShiftsControllerX.Services
         public List<string> ExcludedDates { get; set; } = new List<string>();
         public List<string> FavoriteShiftUsers { get; set; } = new List<string>();
         public int ShiftMinHoursAhead { get; set; }
+        public int WeekendOrHolidayMinHoursAhead { get; set; }
+        public int ImportantShiftNotificationCount { get; set; }
+        public int ImportantShiftNotificationDelayMilliseconds { get; set; }
     }
 
     public class AdminWebServer
@@ -289,11 +295,23 @@ namespace GymBeamShiftsControllerX.Services
                 }
 
                 int shiftMinHoursAhead = NormalizeShiftMinHoursAhead(update.ShiftMinHoursAhead);
+                int weekendOrHolidayMinHoursAhead = NormalizeShiftMinHoursAhead(update.WeekendOrHolidayMinHoursAhead);
+                int importantShiftNotificationCount = NormalizeImportantShiftNotificationCount(update.ImportantShiftNotificationCount);
+                int importantShiftNotificationDelayMilliseconds = NormalizeImportantShiftNotificationDelayMilliseconds(
+                    update.ImportantShiftNotificationDelayMilliseconds);
                 var updatedRules = _shiftRulesStore.Update(update);
                 _config.ShiftRules = updatedRules;
                 _config.Timing.ShiftMinHoursAhead = shiftMinHoursAhead;
+                _config.Timing.WeekendOrHolidayMinHoursAhead = weekendOrHolidayMinHoursAhead;
+                _config.Timing.ImportantShiftNotificationCount = importantShiftNotificationCount;
+                _config.Timing.ImportantShiftNotificationDelayMilliseconds = importantShiftNotificationDelayMilliseconds;
                 ConfigurationLoader.SaveShiftRules(_configFileName, updatedRules);
-                ConfigurationLoader.SaveShiftMinHoursAhead(_configFileName, shiftMinHoursAhead);
+                ConfigurationLoader.SaveShiftTimingSettings(
+                    _configFileName,
+                    shiftMinHoursAhead,
+                    weekendOrHolidayMinHoursAhead,
+                    importantShiftNotificationCount,
+                    importantShiftNotificationDelayMilliseconds);
 
                 Logger.Log("ShiftRules updated from admin API.");
                 WriteJson(context.Response, 200, new { ok = true });
@@ -373,13 +391,26 @@ namespace GymBeamShiftsControllerX.Services
                 Holidays = rules.Holidays,
                 ExcludedDates = rules.ExcludedDates,
                 FavoriteShiftUsers = rules.FavoriteShiftUsers,
-                ShiftMinHoursAhead = _config.Timing.ShiftMinHoursAhead
+                ShiftMinHoursAhead = _config.Timing.ShiftMinHoursAhead,
+                WeekendOrHolidayMinHoursAhead = _config.Timing.WeekendOrHolidayMinHoursAhead,
+                ImportantShiftNotificationCount = _config.Timing.ImportantShiftNotificationCount,
+                ImportantShiftNotificationDelayMilliseconds = _config.Timing.ImportantShiftNotificationDelayMilliseconds
             };
         }
 
         private static int NormalizeShiftMinHoursAhead(int value)
         {
             return Math.Min(Math.Max(value, 1), 720);
+        }
+
+        private static int NormalizeImportantShiftNotificationCount(int value)
+        {
+            return Math.Min(Math.Max(value, 1), 20);
+        }
+
+        private static int NormalizeImportantShiftNotificationDelayMilliseconds(int value)
+        {
+            return Math.Min(Math.Max(value, 0), 600000);
         }
 
         private static int ParseIntOrDefault(string? value, int fallback)
@@ -585,6 +616,12 @@ namespace GymBeamShiftsControllerX.Services
         <h2>Shift Rules</h2>
         <label>ShiftMinHoursAhead (hours before shift starts)</label>
         <input id='shiftMinHoursAhead' type='number' min='1' max='720' step='1' />
+        <label>WeekendOrHolidayMinHoursAhead</label>
+        <input id='weekendOrHolidayMinHoursAhead' type='number' min='1' max='720' step='1' />
+        <label>ImportantShiftNotificationCount</label>
+        <input id='importantShiftNotificationCount' type='number' min='1' max='20' step='1' />
+        <label>ImportantShiftNotificationDelayMilliseconds</label>
+        <input id='importantShiftNotificationDelayMilliseconds' type='number' min='0' max='600000' step='1000' />
         <div class='grid'>
           <div>
             <label>IncludedWeekdays (one per line)</label>
@@ -660,6 +697,9 @@ namespace GymBeamShiftsControllerX.Services
     async function loadRules() {
       const rules = await api('/api/shift-rules');
       document.getElementById('shiftMinHoursAhead').value = rules.shiftMinHoursAhead ?? 48;
+      document.getElementById('weekendOrHolidayMinHoursAhead').value = rules.weekendOrHolidayMinHoursAhead ?? 28;
+      document.getElementById('importantShiftNotificationCount').value = rules.importantShiftNotificationCount ?? 4;
+      document.getElementById('importantShiftNotificationDelayMilliseconds').value = rules.importantShiftNotificationDelayMilliseconds ?? 30000;
       document.getElementById('includedWeekdays').value = arrayToLines(rules.includedWeekdays);
       document.getElementById('startTimesToSkip').value = arrayToLines(rules.startTimesToSkip);
       document.getElementById('favoriteShiftUsers').value = arrayToLines(rules.favoriteShiftUsers);
@@ -670,6 +710,9 @@ namespace GymBeamShiftsControllerX.Services
     async function saveRules() {
       const payload = {
         shiftMinHoursAhead: Number(document.getElementById('shiftMinHoursAhead').value),
+        weekendOrHolidayMinHoursAhead: Number(document.getElementById('weekendOrHolidayMinHoursAhead').value),
+        importantShiftNotificationCount: Number(document.getElementById('importantShiftNotificationCount').value),
+        importantShiftNotificationDelayMilliseconds: Number(document.getElementById('importantShiftNotificationDelayMilliseconds').value),
         includedWeekdays: linesToArray(document.getElementById('includedWeekdays').value),
         startTimesToSkip: linesToArray(document.getElementById('startTimesToSkip').value),
         favoriteShiftUsers: linesToArray(document.getElementById('favoriteShiftUsers').value),

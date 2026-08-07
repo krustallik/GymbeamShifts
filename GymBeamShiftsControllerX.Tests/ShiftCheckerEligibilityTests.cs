@@ -86,6 +86,65 @@ public class ShiftCheckerEligibilityTests
             includedWeekdays: new HashSet<DayOfWeek>()));
     }
 
+    [Theory]
+    [InlineData(27, 59, false)]
+    [InlineData(28, 0, true)]
+    [InlineData(47, 59, true)]
+    public void IsRelevantShift_Uses28HourMinimumForWeekend(int hoursAhead, int minutesAhead, bool expected)
+    {
+        var now = new DateTime(2026, 6, 19, 10, 0, 0); // Friday
+        var shiftStart = now.AddHours(hoursAhead).AddMinutes(minutesAhead);
+        var shift = CreateEligibleShift(shiftStart.Date, shiftStart.ToString("HH:mm"));
+
+        Assert.Equal(expected, InvokeIsRelevant(
+            shift,
+            includedWeekdays: new HashSet<DayOfWeek>(),
+            shiftMinHoursAhead: 48,
+            now: now));
+    }
+
+    [Fact]
+    public void IsRelevantShift_Uses28HourMinimumForHoliday()
+    {
+        var now = new DateTime(2026, 6, 16, 12, 0, 0);
+        var holiday = new DateTime(2026, 6, 17);
+        var shift = CreateEligibleShift(holiday, "18:00"); // 30 hours ahead
+
+        Assert.True(InvokeIsRelevant(
+            shift,
+            holidays: new HashSet<DateTime> { holiday },
+            includedWeekdays: new HashSet<DayOfWeek>(),
+            shiftMinHoursAhead: 48,
+            now: now));
+    }
+
+    [Fact]
+    public void IsRelevantShift_UsesConfiguredWeekendOrHolidayMinimum()
+    {
+        var now = new DateTime(2026, 6, 19, 10, 0, 0);
+        var shift = CreateEligibleShift(new DateTime(2026, 6, 20), "10:00"); // 24 hours ahead
+
+        Assert.True(InvokeIsRelevant(
+            shift,
+            includedWeekdays: new HashSet<DayOfWeek>(),
+            shiftMinHoursAhead: 48,
+            weekendOrHolidayMinHoursAhead: 20,
+            now: now));
+    }
+
+    [Fact]
+    public void IsRelevantShift_KeepsConfiguredMinimumForIncludedWeekday()
+    {
+        var now = new DateTime(2026, 6, 18, 12, 0, 0); // Thursday
+        var shift = CreateEligibleShift(new DateTime(2026, 6, 19), "18:00"); // 30 hours ahead
+
+        Assert.False(InvokeIsRelevant(
+            shift,
+            includedWeekdays: new HashSet<DayOfWeek> { DayOfWeek.Friday },
+            shiftMinHoursAhead: 48,
+            now: now));
+    }
+
     [Fact]
     public void IsRelevantShift_SkipsPlainWeekdayNotIncluded()
     {
@@ -128,6 +187,7 @@ public class ShiftCheckerEligibilityTests
         List<string>? startTimesToSkip = null,
         HashSet<DayOfWeek>? includedWeekdays = null,
         int shiftMinHoursAhead = 1,
+        int weekendOrHolidayMinHoursAhead = 28,
         DateTime? now = null)
     {
         return (bool)IsRelevantShiftMethod.Invoke(null, new object?[]
@@ -138,6 +198,7 @@ public class ShiftCheckerEligibilityTests
             startTimesToSkip ?? new List<string>(),
             includedWeekdays ?? new HashSet<DayOfWeek> { DayOfWeek.Friday },
             shiftMinHoursAhead,
+            weekendOrHolidayMinHoursAhead,
             now ?? new DateTime(2026, 6, 1, 0, 0, 0)
         })!;
     }

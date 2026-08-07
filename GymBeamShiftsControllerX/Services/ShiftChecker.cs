@@ -132,12 +132,14 @@ namespace GymBeamShiftsControllerX.Services
                         startTimesToSkip,
                         includedWeekdays,
                         _config.Timing.ShiftMinHoursAhead,
+                        _config.Timing.WeekendOrHolidayMinHoursAhead,
                         DateTime.Now))
                 {
                     continue;
                 }
 
                 {
+                    bool isWeekendOrHoliday = IsWeekendOrHoliday(shift, holidays);
                     string message = $"Shift found: {shift.Date:dd.MM.yyyy} {shift.TimeFrom}-{shift.TimeTo}, User: {shift.UserId}";
                     Logger.Log($"Найдена релевантная смена: {message}");
 
@@ -176,9 +178,7 @@ namespace GymBeamShiftsControllerX.Services
                         Logger.Log($"Ошибка: модальное окно не открылось вовремя. {ex.Message}");
                     }
 
-                    TelegramService.SendMessage(_config.Telegram.BotToken, _config.Telegram.ChatId, message);
-                    Logger.Log("Сообщение отправлено в Telegram.");
-                    Thread.Sleep(_config.Timing.TelegramDelayMilliseconds);
+                    SendShiftNotifications(message, isWeekendOrHoliday);
 
                     driver.Navigate().Refresh();
                     Logger.Log("Страница обновлена.");
@@ -218,6 +218,7 @@ namespace GymBeamShiftsControllerX.Services
             IReadOnlyList<string> startTimesToSkip,
             HashSet<DayOfWeek> includedWeekdays,
             int shiftMinHoursAhead,
+            int weekendOrHolidayMinHoursAhead,
             DateTime now)
         {
             if (startTimesToSkip.Contains(shift.TimeFrom))
@@ -240,12 +241,47 @@ namespace GymBeamShiftsControllerX.Services
                 return false;
             }
 
-            if (shiftStart < now.AddHours(shiftMinHoursAhead))
+            int minHoursAhead = isWeekend || isHoliday
+                ? weekendOrHolidayMinHoursAhead
+                : shiftMinHoursAhead;
+
+            if (shiftStart < now.AddHours(minHoursAhead))
             {
                 return false;
             }
 
             return (isWeekend || isHoliday || isIncludedWeekday) && shift.ButtonElement != null;
+        }
+
+        private static bool IsWeekendOrHoliday(ShiftEntry shift, HashSet<DateTime> holidays)
+        {
+            DayOfWeek dayOfWeek = shift.Date.DayOfWeek;
+            return dayOfWeek == DayOfWeek.Saturday
+                || dayOfWeek == DayOfWeek.Sunday
+                || holidays.Contains(shift.Date.Date);
+        }
+
+        private void SendShiftNotifications(string message, bool isWeekendOrHoliday)
+        {
+            int notificationCount = isWeekendOrHoliday
+                ? _config.Timing.ImportantShiftNotificationCount
+                : 1;
+
+            for (int notificationNumber = 1; notificationNumber <= notificationCount; notificationNumber++)
+            {
+                TelegramService.SendMessage(_config.Telegram.BotToken, _config.Telegram.ChatId, message);
+                Logger.Log($"Сообщение {notificationNumber}/{notificationCount} отправлено в Telegram.");
+
+                if (notificationNumber < notificationCount)
+                {
+                    Thread.Sleep(_config.Timing.ImportantShiftNotificationDelayMilliseconds);
+                }
+            }
+
+            if (!isWeekendOrHoliday)
+            {
+                Thread.Sleep(_config.Timing.TelegramDelayMilliseconds);
+            }
         }
 
         private static HashSet<DateTime> ParseDateSet(List<string> dates)

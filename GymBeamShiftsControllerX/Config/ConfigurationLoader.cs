@@ -66,6 +66,28 @@ namespace GymBeamShiftsControllerX.Config
             File.WriteAllText(configPath, updatedJson);
         }
 
+        public static void SaveShiftTimingSettings(
+            string fileName,
+            int shiftMinHoursAhead,
+            int weekendOrHolidayMinHoursAhead,
+            int importantShiftNotificationCount,
+            int importantShiftNotificationDelayMilliseconds)
+        {
+            string configPath = FindConfigPath(fileName);
+            string json = File.ReadAllText(configPath);
+            AppConfig fileConfig = JsonSerializer.Deserialize<AppConfig>(json, SerializerOptions)
+                ?? throw new InvalidOperationException("Файл конфигурации пустой или поврежден.");
+
+            fileConfig.Timing ??= new TimingSettings();
+            fileConfig.Timing.ShiftMinHoursAhead = shiftMinHoursAhead;
+            fileConfig.Timing.WeekendOrHolidayMinHoursAhead = weekendOrHolidayMinHoursAhead;
+            fileConfig.Timing.ImportantShiftNotificationCount = importantShiftNotificationCount;
+            fileConfig.Timing.ImportantShiftNotificationDelayMilliseconds = importantShiftNotificationDelayMilliseconds;
+
+            string updatedJson = JsonSerializer.Serialize(fileConfig, SerializerOptions);
+            File.WriteAllText(configPath, updatedJson);
+        }
+
         private static void LoadDotEnvIfExists()
         {
             string? envPath = FindOptionalFilePath(".env");

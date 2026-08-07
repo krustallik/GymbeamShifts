@@ -17,8 +17,11 @@
   "Timing": {
     "CheckIntervalMinutes": 1,
     "ShiftMinHoursAhead": 48,
+    "WeekendOrHolidayMinHoursAhead": 28,
     "DriverRestartAfterIterations": 100,
-    "TelegramDelayMilliseconds": 1000
+    "TelegramDelayMilliseconds": 1000,
+    "ImportantShiftNotificationCount": 4,
+    "ImportantShiftNotificationDelayMilliseconds": 30000
   },
   "ShiftRules": {
     "StartTimesToSkip": [
