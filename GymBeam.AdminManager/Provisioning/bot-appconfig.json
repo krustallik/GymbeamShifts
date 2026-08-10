@@ -1,0 +1,33 @@
+{
+  "Auth": {
+    "LoginUrl": "https://part-time.gymbeam.com/web/login",
+    "Login": "${GYMBEAM_AUTH_LOGIN}",
+    "Password": "${GYMBEAM_AUTH_PASSWORD}",
+    "SuccessUrlContains": "/news"
+  },
+  "Telegram": {
+    "BotToken": "${GYMBEAM_TELEGRAM_BOT_TOKEN}",
+    "ChatId": "${GYMBEAM_TELEGRAM_CHAT_ID}"
+  },
+  "Browser": {
+    "Headless": false,
+    "WindowSize": "1920,1080",
+    "DisableGpu": true
+  },
+  "Timing": {
+    "CheckIntervalMinutes": 1,
+    "ShiftMinHoursAhead": 48,
+    "WeekendOrHolidayMinHoursAhead": 28,
+    "DriverRestartAfterIterations": 100,
+    "TelegramDelayMilliseconds": 1000,
+    "ImportantShiftNotificationCount": 4,
+    "ImportantShiftNotificationDelayMilliseconds": 30000
+  },
+  "ShiftRules": {
+    "StartTimesToSkip": ["22:00", "21:45"],
+    "Holidays": [],
+    "ExcludedDates": [],
+    "IncludedWeekdays": ["Monday", "Friday"],
+    "FavoriteShiftUsers": []
+  }
+}

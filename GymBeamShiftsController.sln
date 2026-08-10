@@ -7,6 +7,10 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GymBeamShiftsControllerX", 
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GymBeamShiftsControllerX.Tests", "GymBeamShiftsControllerX.Tests\GymBeamShiftsControllerX.Tests.csproj", "{BC15638F-68BB-4345-8424-2D97A8ABB645}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GymBeam.AdminManager", "GymBeam.AdminManager\GymBeam.AdminManager.csproj", "{A1D55ED8-8886-4A48-A894-2BE75EF0FEA1}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GymBeam.AdminManager.Tests", "GymBeam.AdminManager.Tests\GymBeam.AdminManager.Tests.csproj", "{341CB973-A748-45CA-915C-B5FC3803B936}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -41,6 +45,30 @@ Global
 		{BC15638F-68BB-4345-8424-2D97A8ABB645}.Release|x64.Build.0 = Release|Any CPU
 		{BC15638F-68BB-4345-8424-2D97A8ABB645}.Release|x86.ActiveCfg = Release|Any CPU
 		{BC15638F-68BB-4345-8424-2D97A8ABB645}.Release|x86.Build.0 = Release|Any CPU
+		{A1D55ED8-8886-4A48-A894-2BE75EF0FEA1}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A1D55ED8-8886-4A48-A894-2BE75EF0FEA1}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A1D55ED8-8886-4A48-A894-2BE75EF0FEA1}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{A1D55ED8-8886-4A48-A894-2BE75EF0FEA1}.Debug|x64.Build.0 = Debug|Any CPU
+		{A1D55ED8-8886-4A48-A894-2BE75EF0FEA1}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{A1D55ED8-8886-4A48-A894-2BE75EF0FEA1}.Debug|x86.Build.0 = Debug|Any CPU
+		{A1D55ED8-8886-4A48-A894-2BE75EF0FEA1}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A1D55ED8-8886-4A48-A894-2BE75EF0FEA1}.Release|Any CPU.Build.0 = Release|Any CPU
+		{A1D55ED8-8886-4A48-A894-2BE75EF0FEA1}.Release|x64.ActiveCfg = Release|Any CPU
+		{A1D55ED8-8886-4A48-A894-2BE75EF0FEA1}.Release|x64.Build.0 = Release|Any CPU
+		{A1D55ED8-8886-4A48-A894-2BE75EF0FEA1}.Release|x86.ActiveCfg = Release|Any CPU
+		{A1D55ED8-8886-4A48-A894-2BE75EF0FEA1}.Release|x86.Build.0 = Release|Any CPU
+		{341CB973-A748-45CA-915C-B5FC3803B936}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{341CB973-A748-45CA-915C-B5FC3803B936}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{341CB973-A748-45CA-915C-B5FC3803B936}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{341CB973-A748-45CA-915C-B5FC3803B936}.Debug|x64.Build.0 = Debug|Any CPU
+		{341CB973-A748-45CA-915C-B5FC3803B936}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{341CB973-A748-45CA-915C-B5FC3803B936}.Debug|x86.Build.0 = Debug|Any CPU
+		{341CB973-A748-45CA-915C-B5FC3803B936}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{341CB973-A748-45CA-915C-B5FC3803B936}.Release|Any CPU.Build.0 = Release|Any CPU
+		{341CB973-A748-45CA-915C-B5FC3803B936}.Release|x64.ActiveCfg = Release|Any CPU
+		{341CB973-A748-45CA-915C-B5FC3803B936}.Release|x64.Build.0 = Release|Any CPU
+		{341CB973-A748-45CA-915C-B5FC3803B936}.Release|x86.ActiveCfg = Release|Any CPU
+		{341CB973-A748-45CA-915C-B5FC3803B936}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

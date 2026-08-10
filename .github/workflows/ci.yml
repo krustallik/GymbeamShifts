@@ -9,16 +9,24 @@ on:
       - main
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   test:
     runs-on: ubuntu-latest
+    env:
+      ADMIN_MANAGER_ADMIN_USERNAME: validation-admin
+      ADMIN_MANAGER_ADMIN_PASSWORD_HASH: 'pbkdf2-sha256$210000$AAECAwQFBgcICQoLDA0ODw==$TCQtsVgsg/RkQ8w2PXjS3ybxbSkxX5J/vmOK1ZcN6FY='
+      ADMIN_MANAGER_SESSION_SIGNING_KEY: AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA=
+      ADMIN_MANAGER_PROVISIONING_DOCKER_INSTANCES_PATH: ${{ github.workspace }}/instances
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Setup .NET
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
         with:
           dotnet-version: |
             8.0.x
@@ -30,8 +38,23 @@ jobs:
       - name: Build
         run: dotnet build GymBeamShiftsController.sln --configuration Release --no-restore
 
-      - name: Test
+      - name: Unit tests
+        run: dotnet test GymBeamShiftsController.sln --configuration Release --no-build --filter "FullyQualifiedName!~IntegrationTests&FullyQualifiedName!~DeploymentConfigurationTests" --verbosity normal
+
+      - name: Integration tests
+        run: dotnet test GymBeamShiftsController.sln --configuration Release --no-build --filter "FullyQualifiedName~IntegrationTests" --verbosity normal
+
+      - name: Security tests
+        run: dotnet test GymBeamShiftsController.sln --configuration Release --no-build --filter "FullyQualifiedName~Security" --verbosity normal
+
+      - name: Deployment tests
+        run: dotnet test GymBeamShiftsController.sln --configuration Release --no-build --filter "FullyQualifiedName~DeploymentConfigurationTests" --verbosity normal
+
+      - name: Full test suite
         run: dotnet test GymBeamShiftsController.sln --configuration Release --no-build --verbosity normal
+
+      - name: Format verification
+        run: dotnet format GymBeamShiftsController.sln --verify-no-changes --no-restore
 
       - name: Prepare deployment fixtures
         run: |
@@ -40,17 +63,25 @@ jobs:
           cp deploy/examples/bot.env.example instances/bot2/.env
           cp deploy/examples/appconfig.example.json instances/bot1/appconfig.json
           cp deploy/examples/appconfig.example.json instances/bot2/appconfig.json
+          mkdir -p runtime/caddy-dynamic
+          cp deploy/examples/caddy-dynamic/*.caddy runtime/caddy-dynamic/
+          mkdir -p runtime/caddy
+          cp Caddyfile runtime/caddy/Caddyfile
 
       - name: Validate Docker Compose
         run: docker compose config --quiet
 
-      - name: Build Docker image
-        run: docker compose build gymbeam-bot-1
+      - name: Validate deployment scripts
+        run: bash -n scripts/deploy.sh scripts/rollback.sh
+
+      - name: Build Docker images
+        run: docker compose build gymbeam-bot-1 gymbeam-admin-manager
 
       - name: Validate Caddy configuration
         run: |
           docker run --rm \
             -v "$PWD/Caddyfile:/etc/caddy/Caddyfile:ro" \
+            -v "$PWD/runtime/caddy-dynamic:/etc/caddy/dynamic:ro" \
             caddy:2-alpine \
             caddy validate --config /etc/caddy/Caddyfile
 
@@ -63,7 +94,7 @@ jobs:
 
     steps:
       - name: Deploy over SSH
-        uses: appleboy/ssh-action@v1.2.0
+        uses: appleboy/ssh-action@7eaf76671a0d7eec5d98ee897acda4f968735a17 # v1.2.0
         with:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
@@ -73,4 +104,8 @@ jobs:
           script: |
             set -euo pipefail
             cd "${{ secrets.DEPLOY_PATH }}"
-            bash scripts/deploy.sh
+            previous_commit="$(git rev-parse HEAD)"
+            git fetch origin main
+            git checkout main
+            git pull --ff-only origin main
+            DEPLOY_PREVIOUS_COMMIT="$previous_commit" DEPLOY_SKIP_UPDATE=1 bash scripts/deploy.sh

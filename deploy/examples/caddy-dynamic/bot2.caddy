@@ -1,0 +1,13 @@
+http://bot2.mapa-svietidiel.sk {
+	redir https://bot2.mapa-svietidiel.sk{uri} permanent
+}
+
+bot2.mapa-svietidiel.sk {
+	encode zstd gzip
+	header {
+		-Server
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "no-referrer"
+	}
+	reverse_proxy gymbeam-shifts-bot-2:8080
+}

@@ -10,6 +10,7 @@ x-bot-common: &bot-common
     GYMBEAM_ADMIN_PORT: "8080"
     CHROME_BIN: /usr/bin/chromium
     GYMBEAM_LOG_PATH: /app/runtime-data/app.log
+    GYMBEAM_ENV_PATH: /app/instance/.env
   expose:
     - "8080"
   shm_size: "256mb"
@@ -25,20 +26,85 @@ services:
   gymbeam-bot-1:
     <<: *bot-common
     container_name: gymbeam-shifts-bot-1
-    env_file:
-      - ./instances/bot1/.env
     volumes:
+      - ./instances/bot1:/app/instance:ro
       - ./instances/bot1/appconfig.json:/app/appconfig.json
       - ./instances/bot1/runtime-data:/app/runtime-data
+    labels:
+      com.gymbeam.managed: "true"
+      com.gymbeam.bot-id: "bot1"
+      com.gymbeam.role: "bot"
 
   gymbeam-bot-2:
     <<: *bot-common
     container_name: gymbeam-shifts-bot-2
-    env_file:
-      - ./instances/bot2/.env
     volumes:
+      - ./instances/bot2:/app/instance:ro
       - ./instances/bot2/appconfig.json:/app/appconfig.json
       - ./instances/bot2/runtime-data:/app/runtime-data
+    labels:
+      com.gymbeam.managed: "true"
+      com.gymbeam.bot-id: "bot2"
+      com.gymbeam.role: "bot"
+
+  gymbeam-admin-manager:
+    image: gymbeam-admin-manager:latest
+    build:
+      context: .
+      dockerfile: GymBeam.AdminManager/Dockerfile
+    container_name: gymbeam-admin-manager
+    restart: unless-stopped
+    init: true
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    group_add:
+      - "${DOCKER_SOCKET_GID:-0}"
+    environment:
+      ADMIN_MANAGER_BIND_ADDRESS: "0.0.0.0"
+      ADMIN_MANAGER_PORT: "8080"
+      ADMIN_MANAGER_PUBLIC_HOST: "${ADMIN_MANAGER_PUBLIC_HOST:-admin.mapa-svietidiel.sk}"
+      ADMIN_MANAGER_ADMIN_USERNAME: "${ADMIN_MANAGER_ADMIN_USERNAME:?Set ADMIN_MANAGER_ADMIN_USERNAME in the deployment environment}"
+      ADMIN_MANAGER_ADMIN_PASSWORD_HASH: "${ADMIN_MANAGER_ADMIN_PASSWORD_HASH:?Set ADMIN_MANAGER_ADMIN_PASSWORD_HASH in the deployment environment}"
+      ADMIN_MANAGER_SESSION_SIGNING_KEY: "${ADMIN_MANAGER_SESSION_SIGNING_KEY:?Set ADMIN_MANAGER_SESSION_SIGNING_KEY in the deployment environment}"
+      ADMIN_MANAGER_SESSION_LIFETIME_MINUTES: "${ADMIN_MANAGER_SESSION_LIFETIME_MINUTES:-480}"
+      ADMIN_MANAGER_LOGIN_MAX_ATTEMPTS: "${ADMIN_MANAGER_LOGIN_MAX_ATTEMPTS:-5}"
+      ADMIN_MANAGER_LOGIN_WINDOW_SECONDS: "${ADMIN_MANAGER_LOGIN_WINDOW_SECONDS:-60}"
+      ADMIN_MANAGER_STORAGE_PATH: "/app/data"
+      ADMIN_MANAGER_INSTANCES_PATH: "/srv/gymbeam/instances"
+      ADMIN_MANAGER_DOCKER_SOCKET_PATH: "/var/run/docker.sock"
+      ADMIN_MANAGER_DOCKER_TIMEOUT_SECONDS: "${ADMIN_MANAGER_DOCKER_TIMEOUT_SECONDS:-3}"
+      ADMIN_MANAGER_DOCKER_HEALTH_TIMEOUT_SECONDS: "${ADMIN_MANAGER_DOCKER_HEALTH_TIMEOUT_SECONDS:-60}"
+      ADMIN_MANAGER_DOCKER_HEALTH_POLL_MILLISECONDS: "${ADMIN_MANAGER_DOCKER_HEALTH_POLL_MILLISECONDS:-1000}"
+      ADMIN_MANAGER_DOCKER_MAX_LOG_BYTES: "${ADMIN_MANAGER_DOCKER_MAX_LOG_BYTES:-262144}"
+      ADMIN_MANAGER_PROVISIONING_BASE_DOMAIN: "${ADMIN_MANAGER_PROVISIONING_BASE_DOMAIN:-mapa-svietidiel.sk}"
+      ADMIN_MANAGER_PROVISIONING_DOCKER_IMAGE: "${ADMIN_MANAGER_PROVISIONING_DOCKER_IMAGE:-gymbeam-shifts-bot:latest}"
+      ADMIN_MANAGER_PROVISIONING_DOCKER_NETWORK: "${ADMIN_MANAGER_PROVISIONING_DOCKER_NETWORK:-gymbeam-internal}"
+      ADMIN_MANAGER_PROVISIONING_DOCKER_INSTANCES_PATH: "${ADMIN_MANAGER_PROVISIONING_DOCKER_INSTANCES_PATH:?Set ADMIN_MANAGER_PROVISIONING_DOCKER_INSTANCES_PATH to the absolute host instances directory}"
+      ADMIN_MANAGER_PROVISIONING_CADDY_ADMIN_SOCKET_PATH: "/run/caddy-admin/admin.sock"
+      ADMIN_MANAGER_PROVISIONING_CADDYFILE_PATH: "/etc/caddy/Caddyfile"
+      ADMIN_MANAGER_PROVISIONING_CADDY_ROUTES_PATH: "/etc/caddy/dynamic"
+      ADMIN_MANAGER_PROVISIONING_BOT_TEMPLATE_PATH: "/app/templates/bot-appconfig.json"
+      ADMIN_MANAGER_PROVISIONING_MIN_FREE_DISK_BYTES: "${ADMIN_MANAGER_PROVISIONING_MIN_FREE_DISK_BYTES:-134217728}"
+    volumes:
+      - admin_manager_data:/app/data
+      - ./instances:/srv/gymbeam/instances
+      - ./runtime/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./runtime/caddy-dynamic:/etc/caddy/dynamic
+      - caddy_admin_socket:/run/caddy-admin
+      - /var/run/docker.sock:/var/run/docker.sock
+    expose:
+      - "8080"
+    healthcheck:
+      test: ["CMD-SHELL", "curl --fail --silent --show-error http://127.0.0.1:8080/healthz > /dev/null || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
 
   caddy:
     image: caddy:2-alpine
@@ -49,15 +115,27 @@ services:
         condition: service_healthy
       gymbeam-bot-2:
         condition: service_healthy
+      gymbeam-admin-manager:
+        condition: service_healthy
+    environment:
+      ADMIN_MANAGER_PUBLIC_HOST: "${ADMIN_MANAGER_PUBLIC_HOST:-admin.mapa-svietidiel.sk}"
     ports:
       - "80:80"
       - "443:443"
       - "443:443/udp"
     volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./runtime/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./runtime/caddy-dynamic:/etc/caddy/dynamic:ro
+      - caddy_admin_socket:/run/caddy-admin
       - caddy_data:/data
       - caddy_config:/config
 
 volumes:
+  admin_manager_data:
   caddy_data:
   caddy_config:
+  caddy_admin_socket:
+
+networks:
+  default:
+    name: gymbeam-internal

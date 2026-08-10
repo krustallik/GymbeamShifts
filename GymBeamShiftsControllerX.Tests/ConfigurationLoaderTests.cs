@@ -7,6 +7,7 @@ using Xunit;
 
 namespace GymBeamShiftsControllerX.Tests;
 
+[Collection("MutableEnvironment")]
 public class ConfigurationLoaderTests
 {
     [Fact]

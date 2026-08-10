@@ -12,6 +12,9 @@ packages/
 **/.env
 GymBeamShiftsControllerX/appconfig.local.json
 runtime-data/
+runtime/caddy-dynamic/
+runtime/deployments/
+runtime/caddy/
 nginx/.htpasswd
 instances/*/.env
 instances/*/appconfig.json

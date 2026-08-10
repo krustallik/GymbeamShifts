@@ -90,7 +90,15 @@ namespace GymBeamShiftsControllerX.Config
 
         private static void LoadDotEnvIfExists()
         {
-            string? envPath = FindOptionalFilePath(".env");
+            string configuredPath = Environment.GetEnvironmentVariable("GYMBEAM_ENV_PATH") ?? string.Empty;
+            string? envPath = string.IsNullOrWhiteSpace(configuredPath)
+                ? FindOptionalFilePath(".env")
+                : Path.GetFullPath(configuredPath);
+            if (!string.IsNullOrWhiteSpace(configuredPath) && !File.Exists(envPath))
+            {
+                throw new FileNotFoundException("Configured credential environment file was not found.");
+            }
+
             if (string.IsNullOrWhiteSpace(envPath) || !File.Exists(envPath))
             {
                 return;
@@ -111,18 +119,36 @@ namespace GymBeamShiftsControllerX.Config
                 }
 
                 string key = line[..separatorIndex].Trim();
-                string value = line[(separatorIndex + 1)..].Trim();
-
-                if (value.StartsWith("\"") && value.EndsWith("\"") && value.Length >= 2)
-                {
-                    value = value[1..^1];
-                }
+                string value = DecodeDotEnvValue(line[(separatorIndex + 1)..].Trim());
 
                 if (string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable(key)))
                 {
                     Environment.SetEnvironmentVariable(key, value);
                 }
             }
+        }
+
+        private static string DecodeDotEnvValue(string value)
+        {
+            if (value.Length < 2 || value[0] != '"' || value[^1] != '"')
+            {
+                return value;
+            }
+
+            var decoded = new System.Text.StringBuilder(value.Length - 2);
+            for (int index = 1; index < value.Length - 1; index++)
+            {
+                char character = value[index];
+                if (character == '\\' && index + 1 < value.Length - 1
+                    && value[index + 1] is '\\' or '"')
+                {
+                    character = value[++index];
+                }
+
+                decoded.Append(character);
+            }
+
+            return decoded.ToString();
         }
 
         private static void ResolveSecretPlaceholders(AppConfig config)
