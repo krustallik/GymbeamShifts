@@ -643,6 +643,7 @@ namespace GymBeamShiftsControllerX.Services
     button:hover { background:#1d4ed8; }
     .grid { display:grid; gap:16px; grid-template-columns: 1fr 1fr; }
     .hidden { display:none; }
+    .validation-error { color:#fca5a5; margin-top:10px; white-space:pre-wrap; }
     pre { white-space: pre-wrap; max-height: 320px; overflow:auto; background:#0b1220; padding:10px; border-radius:8px; }
   </style>
 </head>
@@ -670,13 +671,13 @@ namespace GymBeamShiftsControllerX.Services
         <h2>Shift Rules</h2>
         <label class='checkbox-label'><input id='takeLunch' type='checkbox' /> Take lunch</label>
         <label>ShiftMinHoursAhead (hours before shift starts)</label>
-        <input id='shiftMinHoursAhead' type='number' min='1' max='720' step='1' />
+        <input id='shiftMinHoursAhead' type='number' min='1' max='720' step='1' required />
         <label>WeekendOrHolidayMinHoursAhead</label>
-        <input id='weekendOrHolidayMinHoursAhead' type='number' min='1' max='720' step='1' />
+        <input id='weekendOrHolidayMinHoursAhead' type='number' min='1' max='720' step='1' required />
         <label>ImportantShiftNotificationCount</label>
-        <input id='importantShiftNotificationCount' type='number' min='1' max='20' step='1' />
+        <input id='importantShiftNotificationCount' type='number' min='1' max='20' step='1' required />
         <label>ImportantShiftNotificationDelayMilliseconds</label>
-        <input id='importantShiftNotificationDelayMilliseconds' type='number' min='0' max='600000' step='1000' />
+        <input id='importantShiftNotificationDelayMilliseconds' type='number' min='0' max='600000' step='1000' required />
         <div class='grid'>
           <div>
             <label>IncludedWeekdays (one per line)</label>
@@ -694,6 +695,7 @@ namespace GymBeamShiftsControllerX.Services
           </div>
         </div>
         <button onclick='saveRules()'>Save ShiftRules</button>
+        <div id='rulesError' class='validation-error' role='alert'></div>
       </div>
 
       <div class='card'>
@@ -724,6 +726,89 @@ namespace GymBeamShiftsControllerX.Services
 
     function arrayToLines(values) {
       return (values || []).join('\n');
+    }
+
+    function readInteger(id, label, min, max) {
+      const raw = document.getElementById(id).value.trim();
+      if (!/^\d+$/.test(raw)) {
+        throw new Error(`${label} must be a whole number.`);
+      }
+
+      const value = Number(raw);
+      if (!Number.isSafeInteger(value) || value < min || value > max) {
+        throw new Error(`${label} must be between ${min} and ${max}.`);
+      }
+
+      return value;
+    }
+
+    function validateList(values, label, predicate, expectedFormat) {
+      for (const value of values) {
+        if (!predicate(value)) {
+          throw new Error(`${label}: invalid value '${value}'. Expected ${expectedFormat}.`);
+        }
+      }
+      return values;
+    }
+
+    function isValidTime(value) {
+      return /^(?:[01]\d|2[0-3]):[0-5]\d$/.test(value);
+    }
+
+    function isValidDate(value) {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+        return false;
+      }
+
+      const [year, month, day] = value.split('-').map(Number);
+      const date = new Date(Date.UTC(year, month - 1, day));
+      return date.getUTCFullYear() === year
+        && date.getUTCMonth() === month - 1
+        && date.getUTCDate() === day;
+    }
+
+    function buildRulesPayload() {
+      const allowedWeekdays = new Set([
+        'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'
+      ]);
+      const includedWeekdays = validateList(
+        linesToArray(document.getElementById('includedWeekdays').value),
+        'IncludedWeekdays',
+        value => allowedWeekdays.has(value.toLowerCase()),
+        'a weekday name from Monday to Sunday');
+      const startTimesToSkip = validateList(
+        linesToArray(document.getElementById('startTimesToSkip').value),
+        'StartTimesToSkip',
+        isValidTime,
+        'HH:mm (00:00-23:59)');
+      const favoriteShiftUsers = validateList(
+        linesToArray(document.getElementById('favoriteShiftUsers').value),
+        'FavoriteShiftUsers',
+        value => value.length <= 100,
+        'a name up to 100 characters');
+      const holidays = validateList(
+        linesToArray(document.getElementById('holidays').value),
+        'Holidays',
+        isValidDate,
+        'a real date in yyyy-MM-dd format');
+      const excludedDates = validateList(
+        linesToArray(document.getElementById('excludedDates').value),
+        'ExcludedDates',
+        isValidDate,
+        'a real date in yyyy-MM-dd format');
+
+      return {
+        takeLunch: document.getElementById('takeLunch').checked,
+        shiftMinHoursAhead: readInteger('shiftMinHoursAhead', 'ShiftMinHoursAhead', 1, 720),
+        weekendOrHolidayMinHoursAhead: readInteger('weekendOrHolidayMinHoursAhead', 'WeekendOrHolidayMinHoursAhead', 1, 720),
+        importantShiftNotificationCount: readInteger('importantShiftNotificationCount', 'ImportantShiftNotificationCount', 1, 20),
+        importantShiftNotificationDelayMilliseconds: readInteger('importantShiftNotificationDelayMilliseconds', 'ImportantShiftNotificationDelayMilliseconds', 0, 600000),
+        includedWeekdays,
+        startTimesToSkip,
+        favoriteShiftUsers,
+        holidays,
+        excludedDates
+      };
     }
 
     async function login() {
@@ -764,21 +849,16 @@ namespace GymBeamShiftsControllerX.Services
     }
 
     async function saveRules() {
-      const payload = {
-        takeLunch: document.getElementById('takeLunch').checked,
-        shiftMinHoursAhead: Number(document.getElementById('shiftMinHoursAhead').value),
-        weekendOrHolidayMinHoursAhead: Number(document.getElementById('weekendOrHolidayMinHoursAhead').value),
-        importantShiftNotificationCount: Number(document.getElementById('importantShiftNotificationCount').value),
-        importantShiftNotificationDelayMilliseconds: Number(document.getElementById('importantShiftNotificationDelayMilliseconds').value),
-        includedWeekdays: linesToArray(document.getElementById('includedWeekdays').value),
-        startTimesToSkip: linesToArray(document.getElementById('startTimesToSkip').value),
-        favoriteShiftUsers: linesToArray(document.getElementById('favoriteShiftUsers').value),
-        holidays: linesToArray(document.getElementById('holidays').value),
-        excludedDates: linesToArray(document.getElementById('excludedDates').value)
-      };
-      await api('/api/shift-rules', { method: 'PUT', body: JSON.stringify(payload) });
-      await loadRules();
-      alert('Saved');
+      const errorElement = document.getElementById('rulesError');
+      errorElement.innerText = '';
+      try {
+        const payload = buildRulesPayload();
+        await api('/api/shift-rules', { method: 'PUT', body: JSON.stringify(payload) });
+        await loadRules();
+        alert('Saved');
+      } catch (e) {
+        errorElement.innerText = e.message;
+      }
     }
 
     async function loadLogs() {

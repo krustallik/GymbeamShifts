@@ -97,6 +97,8 @@ public class AdminWebServerIntegrationTests : IDisposable
         Assert.Contains("importantShiftNotificationCount", body);
         Assert.Contains("importantShiftNotificationDelayMilliseconds", body);
         Assert.Contains("id='takeLunch'", body);
+        Assert.Contains("id='rulesError'", body);
+        Assert.Contains("buildRulesPayload", body);
     }
 
     [Fact]

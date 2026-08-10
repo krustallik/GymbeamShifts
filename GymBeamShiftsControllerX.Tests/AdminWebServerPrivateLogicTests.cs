@@ -420,6 +420,11 @@ public class AdminWebServerPrivateLogicTests
         Assert.Contains("id='takeLunch'", html);
         Assert.Contains("rules.takeLunch", html);
         Assert.Contains("takeLunch: document.getElementById('takeLunch').checked", html);
+        Assert.Contains("function readInteger", html);
+        Assert.Contains("function isValidTime", html);
+        Assert.Contains("function isValidDate", html);
+        Assert.Contains("function buildRulesPayload", html);
+        Assert.Contains("id='rulesError'", html);
     }
 
     private static AdminWebServer CreateServer()
