@@ -24,169 +24,185 @@ namespace GymBeamShiftsControllerX.Services
 
         public void CheckForShifts()
         {
-            var driver = _browserSession.Driver;
-            var wait = new WebDriverWait(driver, TimeSpan.FromSeconds(60));
-
-            driver.Navigate().Refresh();
-            Logger.Log("Страница обновлена.");
-
-            var selectElement = wait.Until(
-                ExpectedConditions.ElementToBeClickable(By.Name(AppConstants.InvitationsTableLengthName))
-            );
-            var dropdown = new SelectElement(selectElement);
-            dropdown.SelectByValue("100");
-            Logger.Log("Выбрано значение 100 в выпадающем меню.");
-
-            var sortHeader = wait.Until(
-                ExpectedConditions.ElementToBeClickable(By.CssSelector(AppConstants.SortHeaderSelector))
-            );
-            sortHeader.Click();
-            Logger.Log("Нажат заголовок 'Od' - первый клик");
-
-            wait.Until(webDriver =>
+            while (true)
             {
-                var tableRows = webDriver.FindElements(By.CssSelector(AppConstants.TableRowsSelector));
-                return tableRows.Count > 0;
-            });
-            Logger.Log("Таблица смен обновлена и содержит записи.");
+                var driver = _browserSession.Driver;
+                var wait = new WebDriverWait(driver, TimeSpan.FromSeconds(60));
 
-            try
-            {
-                Logger.Log("Ожидаем кнопку 'Only allow essential cookies' для закрытия cookie-баннера.");
-                var allowEssentialCookiesButton = wait.Until(
-                    ExpectedConditions.ElementToBeClickable(By.Id(AppConstants.CookiesEssentialButtonId))
+                driver.Navigate().Refresh();
+                Logger.Log("Страница обновлена.");
+
+                var selectElement = wait.Until(
+                    ExpectedConditions.ElementToBeClickable(By.Name(AppConstants.InvitationsTableLengthName))
                 );
-                Logger.Log("Нажимаем кнопку 'Only allow essential cookies'.");
-                allowEssentialCookiesButton.Click();
-                Logger.Log("Кнопка 'Only allow essential cookies' нажата.");
-            }
-            catch (WebDriverTimeoutException)
-            {
-                Logger.Log("Cookie-баннер не найден (timeout). Пропускаем...");
-            }
-            catch (NoSuchElementException)
-            {
-                Logger.Log("Cookie-баннер не найден. Пропускаем...");
-            }
+                var dropdown = new SelectElement(selectElement);
+                dropdown.SelectByValue("100");
+                Logger.Log("Выбрано значение 100 в выпадающем меню.");
 
-            var rows = driver.FindElements(By.CssSelector(AppConstants.TableRowsSelector));
-            Logger.Log($"Найдено строк: {rows.Count}");
+                var sortHeader = wait.Until(
+                    ExpectedConditions.ElementToBeClickable(By.CssSelector(AppConstants.SortHeaderSelector))
+                );
+                sortHeader.Click();
+                Logger.Log("Нажат заголовок 'Od' - первый клик");
 
-            var shiftList = new List<ShiftEntry>();
-
-            foreach (var row in rows)
-            {
-                var cells = row.FindElements(By.TagName("td"));
-                if (cells.Count < 5)
+                wait.Until(webDriver =>
                 {
-                    continue;
-                }
+                    var tableRows = webDriver.FindElements(By.CssSelector(AppConstants.TableRowsSelector));
+                    return tableRows.Count > 0;
+                });
+                Logger.Log("Таблица смен обновлена и содержит записи.");
 
-                string dateStr = cells[0].Text.Trim();
-                if (!DateTime.TryParseExact(
-                        dateStr,
-                        "dd.MM.yyyy",
-                        CultureInfo.InvariantCulture,
-                        DateTimeStyles.None,
-                        out var parsedDate))
-                {
-                    continue;
-                }
-
-                string timeFrom = cells[1].Text.Trim();
-                string timeTo = cells[2].Text.Trim();
-                string userId = cells[3].Text.Trim();
-
-                IWebElement buttonElement = null;
                 try
                 {
-                    buttonElement = cells[4].FindElement(By.CssSelector(AppConstants.SubscribeButtonSelector));
+                    Logger.Log("Ожидаем кнопку 'Only allow essential cookies' для закрытия cookie-баннера.");
+                    var allowEssentialCookiesButton = wait.Until(
+                        ExpectedConditions.ElementToBeClickable(By.Id(AppConstants.CookiesEssentialButtonId))
+                    );
+                    Logger.Log("Нажимаем кнопку 'Only allow essential cookies'.");
+                    allowEssentialCookiesButton.Click();
+                    Logger.Log("Кнопка 'Only allow essential cookies' нажата.");
+                }
+                catch (WebDriverTimeoutException)
+                {
+                    Logger.Log("Cookie-баннер не найден (timeout). Пропускаем...");
                 }
                 catch (NoSuchElementException)
                 {
+                    Logger.Log("Cookie-баннер не найден. Пропускаем...");
                 }
 
-                shiftList.Add(new ShiftEntry
+                var rows = driver.FindElements(By.CssSelector(AppConstants.TableRowsSelector));
+                Logger.Log($"Найдено строк: {rows.Count}");
+
+                var shiftList = new List<ShiftEntry>();
+
+                foreach (var row in rows)
                 {
-                    Date = parsedDate,
-                    TimeFrom = timeFrom,
-                    TimeTo = timeTo,
-                    UserId = userId,
-                    ButtonElement = buttonElement
-                });
-            }
+                    var cells = row.FindElements(By.TagName("td"));
+                    if (cells.Count < 5)
+                    {
+                        continue;
+                    }
 
-            var rules = _shiftRulesStore.GetSnapshot();
-            var holidays = ParseDateSet(rules.Holidays);
-            var excludedDates = ParseDateSet(rules.ExcludedDates);
-            var startTimesToSkip = rules.StartTimesToSkip ?? new List<string>();
-            var includedWeekdays = ParseWeekdaySet(rules.IncludedWeekdays);
-            var favoriteShiftUserPriorities = ParseFavoriteShiftUserPriorities(rules.FavoriteShiftUsers);
+                    string dateStr = cells[0].Text.Trim();
+                    if (!DateTime.TryParseExact(
+                            dateStr,
+                            "dd.MM.yyyy",
+                            CultureInfo.InvariantCulture,
+                            DateTimeStyles.None,
+                            out var parsedDate))
+                    {
+                        continue;
+                    }
 
-            foreach (var shift in PrioritizeShiftsByFavoriteUsers(shiftList, favoriteShiftUserPriorities))
-            {
-                if (!IsRelevantShift(
-                        shift,
-                        holidays,
-                        excludedDates,
-                        startTimesToSkip,
-                        includedWeekdays,
-                        _config.Timing.ShiftMinHoursAhead,
-                        _config.Timing.WeekendOrHolidayMinHoursAhead,
-                        DateTime.Now))
-                {
-                    continue;
-                }
+                    string timeFrom = cells[1].Text.Trim();
+                    string timeTo = cells[2].Text.Trim();
+                    string userId = cells[3].Text.Trim();
 
-                {
-                    bool isWeekendOrHoliday = IsWeekendOrHoliday(shift, holidays);
-                    string message = $"Shift found: {shift.Date:dd.MM.yyyy} {shift.TimeFrom}-{shift.TimeTo}, User: {shift.UserId}";
-                    Logger.Log($"Найдена релевантная смена: {message}");
-
-                    Logger.Log("Нажимаем кнопку 'Prihlásiť'.");
-                    shift.ButtonElement.Click();
-                    Logger.Log("Кнопка 'Prihlásiť' нажата.");
-
+                    IWebElement buttonElement = null;
                     try
                     {
-                        wait.Until(ExpectedConditions.ElementIsVisible(By.Id(AppConstants.SubscribeModalId)));
-                        Logger.Log("Модальное окно открыто.");
-
-                        string lunchRadioId = rules.TakeLunch
-                            ? AppConstants.LunchYesRadioId
-                            : AppConstants.LunchNoRadioId;
-                        string lunchChoice = rules.TakeLunch ? "yes" : "no";
-                        var lunchRadio = wait.Until(
-                            ExpectedConditions.ElementToBeClickable(By.Id(lunchRadioId))
-                        );
-                        Logger.Log($"Нажимаем радиокнопку 'Lunch {lunchChoice}'.");
-                        lunchRadio.Click();
-                        Logger.Log($"Радиокнопка 'Lunch {lunchChoice}' нажата.");
-
-                        var confirmButton = wait.Until(
-                            ExpectedConditions.ElementToBeClickable(By.Id(AppConstants.SubscribeSubmitButtonId))
-                        );
-                        Logger.Log("Нажимаем кнопку 'Confirm'.");
-                        confirmButton.Click();
-                        Logger.Log("Кнопка 'Confirm' нажата.");
-
-                        wait.Until(ExpectedConditions.InvisibilityOfElementLocated(By.Id(AppConstants.SubscribeModalId)));
-                        Logger.Log("Модальное окно закрыто.");
+                        buttonElement = cells[4].FindElement(By.CssSelector(AppConstants.SubscribeButtonSelector));
                     }
-                    catch (NoSuchElementException ex)
+                    catch (NoSuchElementException)
                     {
-                        Logger.Log($"Ошибка: не удалось найти необходимые элементы в модальном окне. {ex.Message}");
                     }
-                    catch (WebDriverTimeoutException ex)
+
+                    shiftList.Add(new ShiftEntry
                     {
-                        Logger.Log($"Ошибка: модальное окно не открылось вовремя. {ex.Message}");
+                        Date = parsedDate,
+                        TimeFrom = timeFrom,
+                        TimeTo = timeTo,
+                        UserId = userId,
+                        ButtonElement = buttonElement
+                    });
+                }
+
+                var rules = _shiftRulesStore.GetSnapshot();
+                var holidays = ParseDateSet(rules.Holidays);
+                var excludedDates = ParseDateSet(rules.ExcludedDates);
+                var startTimesToSkip = rules.StartTimesToSkip ?? new List<string>();
+                var includedWeekdays = ParseWeekdaySet(rules.IncludedWeekdays);
+                var favoriteShiftUserPriorities = ParseFavoriteShiftUserPriorities(rules.FavoriteShiftUsers);
+                bool shiftRegistered = false;
+
+                foreach (var shift in PrioritizeShiftsByFavoriteUsers(shiftList, favoriteShiftUserPriorities))
+                {
+                    if (!IsRelevantShift(
+                            shift,
+                            holidays,
+                            excludedDates,
+                            startTimesToSkip,
+                            includedWeekdays,
+                            _config.Timing.ShiftMinHoursAhead,
+                            _config.Timing.WeekendOrHolidayMinHoursAhead,
+                            DateTime.Now))
+                    {
+                        continue;
                     }
 
-                    SendShiftNotifications(message, isWeekendOrHoliday);
+                    {
+                        bool isWeekendOrHoliday = IsWeekendOrHoliday(shift, holidays);
+                        string message = $"Shift found: {shift.Date:dd.MM.yyyy} {shift.TimeFrom}-{shift.TimeTo}, User: {shift.UserId}";
+                        Logger.Log($"Найдена релевантная смена: {message}");
 
-                    driver.Navigate().Refresh();
-                    Logger.Log("Страница обновлена.");
-                    CheckForShifts();
+                        Logger.Log("Нажимаем кнопку 'Prihlásiť'.");
+                        shift.ButtonElement.Click();
+                        Logger.Log("Кнопка 'Prihlásiť' нажата.");
+
+                        bool subscriptionConfirmed = false;
+                        try
+                        {
+                            wait.Until(ExpectedConditions.ElementIsVisible(By.Id(AppConstants.SubscribeModalId)));
+                            Logger.Log("Модальное окно открыто.");
+
+                            string lunchRadioId = rules.TakeLunch
+                                ? AppConstants.LunchYesRadioId
+                                : AppConstants.LunchNoRadioId;
+                            string lunchChoice = rules.TakeLunch ? "yes" : "no";
+                            var lunchRadio = wait.Until(
+                                ExpectedConditions.ElementToBeClickable(By.Id(lunchRadioId))
+                            );
+                            Logger.Log($"Нажимаем радиокнопку 'Lunch {lunchChoice}'.");
+                            lunchRadio.Click();
+                            Logger.Log($"Радиокнопка 'Lunch {lunchChoice}' нажата.");
+
+                            var confirmButton = wait.Until(
+                                ExpectedConditions.ElementToBeClickable(By.Id(AppConstants.SubscribeSubmitButtonId))
+                            );
+                            Logger.Log("Нажимаем кнопку 'Confirm'.");
+                            confirmButton.Click();
+                            Logger.Log("Кнопка 'Confirm' нажата.");
+
+                            wait.Until(ExpectedConditions.InvisibilityOfElementLocated(By.Id(AppConstants.SubscribeModalId)));
+                            Logger.Log("Модальное окно закрыто.");
+                            subscriptionConfirmed = true;
+                        }
+                        catch (NoSuchElementException ex)
+                        {
+                            Logger.Log($"Ошибка: не удалось найти необходимые элементы в модальном окне. {ex.Message}");
+                        }
+                        catch (WebDriverTimeoutException ex)
+                        {
+                            Logger.Log($"Ошибка: модальное окно не открылось вовремя. {ex.Message}");
+                        }
+
+                        if (!subscriptionConfirmed)
+                        {
+                            Logger.Log("Регистрация смены не подтверждена. Уведомление не отправляется.");
+                            driver.Navigate().Refresh();
+                            Logger.Log("Страница обновлена.");
+                            return;
+                        }
+
+                        SendShiftNotifications(message, isWeekendOrHoliday);
+                        shiftRegistered = true;
+                        break;
+                    }
+                }
+
+                if (!shiftRegistered)
+                {
                     return;
                 }
             }

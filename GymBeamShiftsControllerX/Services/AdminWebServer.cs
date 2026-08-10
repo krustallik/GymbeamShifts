@@ -227,7 +227,17 @@ namespace GymBeamShiftsControllerX.Services
             }
 
             var body = ReadRequestBody(context.Request);
-            var payload = JsonSerializer.Deserialize<Dictionary<string, string>>(body, RequestJsonOptions);
+            Dictionary<string, string>? payload;
+            try
+            {
+                payload = JsonSerializer.Deserialize<Dictionary<string, string>>(body, RequestJsonOptions);
+            }
+            catch (JsonException)
+            {
+                WriteJson(context.Response, 400, new { error = "Invalid payload" });
+                return;
+            }
+
             if (payload == null)
             {
                 WriteJson(context.Response, 400, new { error = "Invalid payload" });

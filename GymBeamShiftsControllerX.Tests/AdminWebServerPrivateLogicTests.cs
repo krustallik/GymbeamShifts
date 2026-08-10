@@ -76,6 +76,54 @@ public class AdminWebServerPrivateLogicTests
     }
 
     [Fact]
+    public void SignedToken_BecomesInvalid_WhenSignatureIsNotBase64()
+    {
+        var validateToken = GetStaticMethod("TryValidateToken");
+        var args = new object?[] { "payload.!", null };
+
+        var isValid = (bool)validateToken.Invoke(null, args)!;
+
+        Assert.False(isValid);
+    }
+
+    [Fact]
+    public void SignedToken_BecomesInvalid_WhenPayloadIsNotBase64()
+    {
+        var validateToken = GetStaticMethod("TryValidateToken");
+        var signPayload = GetStaticMethod("SignPayload");
+        var encode = GetStaticMethod("Base64UrlEncode");
+        const string invalidPayload = "!";
+        string signature = (string)encode.Invoke(
+            null,
+            new object[] { signPayload.Invoke(null, new object[] { invalidPayload })! })!;
+        var args = new object?[] { $"{invalidPayload}.{signature}", null };
+
+        var isValid = (bool)validateToken.Invoke(null, args)!;
+
+        Assert.False(isValid);
+    }
+
+    [Theory]
+    [InlineData("admin|nonce")]
+    [InlineData("admin|not-a-number|nonce")]
+    [InlineData(" |4102444800|nonce")]
+    public void SignedToken_BecomesInvalid_WhenPayloadFieldsAreInvalid(string payload)
+    {
+        var validateToken = GetStaticMethod("TryValidateToken");
+        var signPayload = GetStaticMethod("SignPayload");
+        var encode = GetStaticMethod("Base64UrlEncode");
+        string payloadPart = (string)encode.Invoke(null, new object[] { Encoding.UTF8.GetBytes(payload) })!;
+        string signaturePart = (string)encode.Invoke(
+            null,
+            new object[] { signPayload.Invoke(null, new object[] { payloadPart })! })!;
+        var args = new object?[] { $"{payloadPart}.{signaturePart}", null };
+
+        var isValid = (bool)validateToken.Invoke(null, args)!;
+
+        Assert.False(isValid);
+    }
+
+    [Fact]
     public void LoginRateLimit_BlocksAfterThreeAttemptsPerMinute()
     {
         var server = CreateServer();
@@ -104,6 +152,23 @@ public class AdminWebServerPrivateLogicTests
 
         var limited = (bool)isLimited.Invoke(server, new object[] { ip })!;
         Assert.False(limited);
+    }
+
+    [Fact]
+    public void LoginRateLimit_RemovesExpiredAttempts()
+    {
+        var server = CreateServer();
+        var attemptsField = typeof(AdminWebServer).GetField(
+            "_loginAttemptsByIp",
+            BindingFlags.Instance | BindingFlags.NonPublic)!;
+        var attempts = (Dictionary<string, List<DateTime>>)attemptsField.GetValue(server)!;
+        attempts["127.0.0.3"] = new List<DateTime> { DateTime.UtcNow.AddMinutes(-2) };
+        var isLimited = GetInstanceMethod("IsLoginRateLimited");
+
+        var limited = (bool)isLimited.Invoke(server, new object[] { "127.0.0.3" })!;
+
+        Assert.False(limited);
+        Assert.DoesNotContain("127.0.0.3", attempts.Keys);
     }
 
     [Theory]
@@ -170,6 +235,42 @@ public class AdminWebServerPrivateLogicTests
         }
     }
 
+    [Theory]
+    [InlineData(null, 8080)]
+    [InlineData("invalid", 8080)]
+    [InlineData("9123", 9123)]
+    public void GetAdminPort_UsesConfiguredOrDefaultValue(string? value, int expected)
+    {
+        string? previous = Environment.GetEnvironmentVariable("GYMBEAM_ADMIN_PORT");
+        try
+        {
+            Environment.SetEnvironmentVariable("GYMBEAM_ADMIN_PORT", value);
+            Assert.Equal(expected, (int)GetStaticMethod("GetAdminPort").Invoke(null, null)!);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("GYMBEAM_ADMIN_PORT", previous);
+        }
+    }
+
+    [Theory]
+    [InlineData(null, "localhost")]
+    [InlineData("   ", "localhost")]
+    [InlineData(" 127.0.0.1 ", "127.0.0.1")]
+    public void GetAdminHost_TrimsConfiguredOrUsesDefaultValue(string? value, string expected)
+    {
+        string? previous = Environment.GetEnvironmentVariable("GYMBEAM_ADMIN_HOST");
+        try
+        {
+            Environment.SetEnvironmentVariable("GYMBEAM_ADMIN_HOST", value);
+            Assert.Equal(expected, (string)GetStaticMethod("GetAdminHost").Invoke(null, null)!);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("GYMBEAM_ADMIN_HOST", previous);
+        }
+    }
+
     [Fact]
     public void ReadTodayLogLines_ReturnsEmptyWhenFileMissing()
     {
@@ -228,6 +329,30 @@ public class AdminWebServerPrivateLogicTests
     }
 
     [Fact]
+    public void ReadTodayLogLines_ReturnsAllTodayLinesWhenWithinLimit()
+    {
+        string logPath = Path.Combine(Path.GetTempPath(), $"admin-log-{Guid.NewGuid():N}.log");
+        Environment.SetEnvironmentVariable("GYMBEAM_LOG_PATH", logPath);
+        ResetLoggerPath();
+
+        try
+        {
+            string today = DateTime.Now.ToString("yyyy-MM-dd");
+            File.WriteAllLines(logPath, new[] { $"{today} one", $"{today} two" });
+
+            var lines = (List<string>)GetStaticMethod("ReadTodayLogLines").Invoke(null, new object[] { 10 })!;
+
+            Assert.Equal(2, lines.Count);
+        }
+        finally
+        {
+            if (File.Exists(logPath)) File.Delete(logPath);
+            Environment.SetEnvironmentVariable("GYMBEAM_LOG_PATH", null);
+            ResetLoggerPath();
+        }
+    }
+
+    [Fact]
     public void BuildShiftRulesApiResponse_IncludesFavoriteShiftUsersAndShiftMinHoursAhead()
     {
         var cfg = new AppConfig
@@ -270,6 +395,31 @@ public class AdminWebServerPrivateLogicTests
         byte[] decoded = (byte[])decode.Invoke(null, new object[] { encoded })!;
 
         Assert.Equal(original, decoded);
+    }
+
+    [Theory]
+    [InlineData(new byte[] { 1 })]
+    [InlineData(new byte[] { 1, 2 })]
+    [InlineData(new byte[] { 1, 2, 3 })]
+    public void Base64UrlEncodeDecode_RoundTripsDifferentPaddingLengths(byte[] original)
+    {
+        var encode = GetStaticMethod("Base64UrlEncode");
+        var decode = GetStaticMethod("Base64UrlDecode");
+
+        string encoded = (string)encode.Invoke(null, new object[] { original })!;
+        byte[] decoded = (byte[])decode.Invoke(null, new object[] { encoded })!;
+
+        Assert.Equal(original, decoded);
+    }
+
+    [Fact]
+    public void BuildAdminHtml_IncludesTakeLunchControlAndApiBinding()
+    {
+        string html = (string)GetStaticMethod("BuildAdminHtml").Invoke(null, null)!;
+
+        Assert.Contains("id='takeLunch'", html);
+        Assert.Contains("rules.takeLunch", html);
+        Assert.Contains("takeLunch: document.getElementById('takeLunch').checked", html);
     }
 
     private static AdminWebServer CreateServer()

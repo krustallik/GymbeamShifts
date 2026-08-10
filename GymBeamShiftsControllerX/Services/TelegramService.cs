@@ -19,9 +19,15 @@ namespace GymBeamShiftsControllerX.Services
 
             using (var content = new FormUrlEncodedContent(data))
             {
-                var result = HttpClient.PostAsync(url, content).Result;
+                using var result = HttpClient.PostAsync(url, content).Result;
+                EnsureSuccessfulResponse(result);
                 Logger.Log($"Telegram message sent. Status: {result.StatusCode}");
             }
+        }
+
+        private static void EnsureSuccessfulResponse(HttpResponseMessage response)
+        {
+            response.EnsureSuccessStatusCode();
         }
     }
 }

@@ -96,6 +96,7 @@ public class AdminWebServerIntegrationTests : IDisposable
         Assert.Contains("weekendOrHolidayMinHoursAhead", body);
         Assert.Contains("importantShiftNotificationCount", body);
         Assert.Contains("importantShiftNotificationDelayMilliseconds", body);
+        Assert.Contains("id='takeLunch'", body);
     }
 
     [Fact]
@@ -253,6 +254,113 @@ public class AdminWebServerIntegrationTests : IDisposable
     }
 
     [Fact]
+    public async Task ShiftRules_PutWithoutAuthentication_Returns401()
+    {
+        var response = await _client.PutAsync(
+            "/api/shift-rules",
+            new StringContent("{}", Encoding.UTF8, "application/json"));
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Login_WithNullPayload_Returns400()
+    {
+        var response = await _client.PostAsync(
+            "/api/login",
+            new StringContent("null", Encoding.UTF8, "application/json"));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Login_WithMalformedJson_Returns400AndClosesResponse()
+    {
+        var response = await _client.PostAsync(
+            "/api/login",
+            new StringContent("{ malformed", Encoding.UTF8, "application/json"));
+        var body = await response.Content.ReadAsStringAsync();
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Contains("Invalid payload", body);
+    }
+
+    [Fact]
+    public async Task LoginRateLimit_UsesForwardedClientAddress()
+    {
+        for (int attempt = 0; attempt < 3; attempt++)
+        {
+            using var blockedIpRequest = CreateLoginRequest("bad", "bad");
+            blockedIpRequest.Headers.Add("X-Forwarded-For", "203.0.113.10, 10.0.0.1");
+            var blockedIpResponse = await _client.SendAsync(blockedIpRequest);
+            Assert.Equal(HttpStatusCode.Unauthorized, blockedIpResponse.StatusCode);
+        }
+
+        using var differentIpRequest = CreateLoginRequest("bad", "bad");
+        differentIpRequest.Headers.Add("X-Forwarded-For", "203.0.113.11");
+        var differentIpResponse = await _client.SendAsync(differentIpRequest);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, differentIpResponse.StatusCode);
+    }
+
+    [Fact]
+    public async Task LoginRateLimit_UsesRealIpHeaderWhenForwardedHeaderMissing()
+    {
+        for (int attempt = 0; attempt < 3; attempt++)
+        {
+            using var blockedIpRequest = CreateLoginRequest("bad", "bad");
+            blockedIpRequest.Headers.Add("X-Real-IP", "198.51.100.20");
+            var blockedIpResponse = await _client.SendAsync(blockedIpRequest);
+            Assert.Equal(HttpStatusCode.Unauthorized, blockedIpResponse.StatusCode);
+        }
+
+        using var differentIpRequest = CreateLoginRequest("bad", "bad");
+        differentIpRequest.Headers.Add("X-Real-IP", "198.51.100.21");
+        var differentIpResponse = await _client.SendAsync(differentIpRequest);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, differentIpResponse.StatusCode);
+    }
+
+    [Fact]
+    public async Task ShiftRules_PutClampsNumericSettings()
+    {
+        await LoginAsync("testadmin", "testpass");
+        var payload = """
+        {
+          "shiftMinHoursAhead": 0,
+          "weekendOrHolidayMinHoursAhead": 9999,
+          "importantShiftNotificationCount": 99,
+          "importantShiftNotificationDelayMilliseconds": -1
+        }
+        """;
+
+        var response = await _client.PutAsync(
+            "/api/shift-rules",
+            new StringContent(payload, Encoding.UTF8, "application/json"));
+        var getResponse = await _client.GetAsync("/api/shift-rules");
+        using var document = JsonDocument.Parse(await getResponse.Content.ReadAsStringAsync());
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal(1, document.RootElement.GetProperty("shiftMinHoursAhead").GetInt32());
+        Assert.Equal(720, document.RootElement.GetProperty("weekendOrHolidayMinHoursAhead").GetInt32());
+        Assert.Equal(20, document.RootElement.GetProperty("importantShiftNotificationCount").GetInt32());
+        Assert.Equal(0, document.RootElement.GetProperty("importantShiftNotificationDelayMilliseconds").GetInt32());
+    }
+
+    [Fact]
+    public async Task ShiftRules_PutReturns500WhenConfigCannotBeSaved()
+    {
+        await LoginAsync("testadmin", "testpass");
+        File.Delete(_configPath);
+
+        var response = await _client.PutAsync(
+            "/api/shift-rules",
+            new StringContent("{}", Encoding.UTF8, "application/json"));
+
+        Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
+    }
+
+    [Fact]
     public async Task Logout_ExpiresSessionCookie()
     {
         await LoginAsync("testadmin", "testpass");
@@ -287,6 +395,14 @@ public class AdminWebServerIntegrationTests : IDisposable
         Assert.Equal(2, lines.GetArrayLength());
         Assert.Contains("two", lines[0].GetString());
         Assert.Contains("three", lines[1].GetString());
+    }
+
+    [Fact]
+    public async Task LogsToday_WithoutAuthentication_Returns401()
+    {
+        var response = await _client.GetAsync("/api/logs/today");
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
 
     [Fact]
@@ -333,6 +449,15 @@ public class AdminWebServerIntegrationTests : IDisposable
     {
         var payload = JsonSerializer.Serialize(new { username, password });
         return _client.PostAsync("/api/login", new StringContent(payload, Encoding.UTF8, "application/json"));
+    }
+
+    private static HttpRequestMessage CreateLoginRequest(string username, string password)
+    {
+        var payload = JsonSerializer.Serialize(new { username, password });
+        return new HttpRequestMessage(HttpMethod.Post, "/api/login")
+        {
+            Content = new StringContent(payload, Encoding.UTF8, "application/json")
+        };
     }
 
     private static int GetFreePort()

@@ -47,6 +47,44 @@ public class ProgramStatusTests
     }
 
     [Fact]
+    public void CreateStatusSnapshot_FormatsSuccessAndErrorState()
+    {
+        ResetProgramState();
+        DateTime iteration = DateTime.Now.AddMinutes(-1);
+        DateTime success = DateTime.Now.AddMinutes(-2);
+        DateTime error = DateTime.Now.AddMinutes(-3);
+        ReflectionTestHelper.SetStaticField(typeof(Program), "lastIterationAt", iteration);
+        ReflectionTestHelper.SetStaticField(typeof(Program), "lastSuccessAt", success);
+        ReflectionTestHelper.SetStaticField(typeof(Program), "lastErrorAt", error);
+        ReflectionTestHelper.SetStaticField(typeof(Program), "lastErrorMessage", "test error");
+
+        var method = ReflectionTestHelper.GetStaticMethod(typeof(Program), "CreateStatusSnapshot");
+        var cfg = new AppConfig { Timing = new TimingSettings { CheckIntervalMinutes = 2 } };
+        var snapshot = (BotStatusSnapshot)method.Invoke(null, new object[] { DateTime.Now.AddHours(-1), cfg })!;
+
+        Assert.Equal(iteration.ToString("yyyy-MM-dd HH:mm:ss"), snapshot.LastIterationAt);
+        Assert.Equal(success.ToString("yyyy-MM-dd HH:mm:ss"), snapshot.LastSuccessAt);
+        Assert.Equal(error.ToString("yyyy-MM-dd HH:mm:ss"), snapshot.LastErrorAt);
+        Assert.Equal("test error", snapshot.LastErrorMessage);
+    }
+
+    [Fact]
+    public void CreateStatusSnapshot_UsesEmptyStringsBeforeAnyIterations()
+    {
+        ResetProgramState();
+        var method = ReflectionTestHelper.GetStaticMethod(typeof(Program), "CreateStatusSnapshot");
+        var cfg = new AppConfig { Timing = new TimingSettings { CheckIntervalMinutes = 2 } };
+
+        var snapshot = (BotStatusSnapshot)method.Invoke(null, new object[] { DateTime.Now, cfg })!;
+
+        Assert.False(snapshot.IsRunning);
+        Assert.Equal(string.Empty, snapshot.LastIterationAt);
+        Assert.Equal(string.Empty, snapshot.LastSuccessAt);
+        Assert.Equal(string.Empty, snapshot.LastErrorAt);
+        Assert.Equal(string.Empty, snapshot.LastErrorMessage);
+    }
+
+    [Fact]
     public void ShouldSendDailyStatus_ReturnsFalse_BeforeDailyTime()
     {
         var method = ReflectionTestHelper.GetStaticMethod(typeof(Program), "ShouldSendDailyStatus");
@@ -96,6 +134,105 @@ public class ProgramStatusTests
 
         var exception = Record.Exception(() => method.Invoke(null, new object[] { cfg, "hello" }));
         Assert.Null(exception);
+    }
+
+    [Fact]
+    public void TrySendTelegram_ReturnsFalse_WhenUrlCannotBeCreated()
+    {
+        ResetProgramState();
+        var method = ReflectionTestHelper.GetStaticMethod(typeof(Program), "TrySendTelegram");
+        var cfg = new AppConfig
+        {
+            Telegram = new TelegramSettings { BotToken = new string('x', 70000), ChatId = "chat" }
+        };
+
+        var result = (bool)method.Invoke(null, new object[] { cfg, "hello" })!;
+
+        Assert.False(result);
+    }
+
+    [Fact]
+    public void TrySendDailyStatus_DoesNothingWhenAlreadySentToday()
+    {
+        ResetProgramState();
+        ReflectionTestHelper.SetStaticField(typeof(Program), "lastDailyStatusDate", DateTime.Today);
+        var method = ReflectionTestHelper.GetStaticMethod(typeof(Program), "TrySendDailyStatus");
+
+        method.Invoke(null, new object[] { new AppConfig(), DateTime.Now.AddHours(-1) });
+
+        Assert.Equal(DateTime.Today, ReflectionTestHelper.GetStaticField(typeof(Program), "lastDailyStatusDate"));
+    }
+
+    [Fact]
+    public void TrySendErrorNotification_DoesNothingInsideThrottleWindow()
+    {
+        ResetProgramState();
+        ReflectionTestHelper.SetStaticField(typeof(Program), "totalIterationCount", 10L);
+        ReflectionTestHelper.SetStaticField(typeof(Program), "lastErrorNotificationIteration", 0L);
+        var method = ReflectionTestHelper.GetStaticMethod(typeof(Program), "TrySendErrorNotification");
+
+        method.Invoke(null, new object[] { new AppConfig(), new Exception("ignored"), "test" });
+
+        Assert.Equal(0L, ReflectionTestHelper.GetStaticField(typeof(Program), "lastErrorNotificationIteration"));
+    }
+
+    [Fact]
+    public void SendStartupNotification_HandlesTelegramFailureWithoutThrowing()
+    {
+        ResetProgramState();
+        string? previousHost = Environment.GetEnvironmentVariable("HOSTNAME");
+        string? previousContainer = Environment.GetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER");
+        string? previousPort = Environment.GetEnvironmentVariable("GYMBEAM_ADMIN_PORT");
+        var method = ReflectionTestHelper.GetStaticMethod(typeof(Program), "SendStartupNotification");
+        var cfg = CreateConfigWithInvalidTelegramUrl();
+
+        try
+        {
+            Environment.SetEnvironmentVariable("HOSTNAME", "unit-test-host");
+            Environment.SetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER", "true");
+            Environment.SetEnvironmentVariable("GYMBEAM_ADMIN_PORT", "9123");
+
+            var exception = Record.Exception(() =>
+                method.Invoke(null, new object[] { cfg, new DateTime(2026, 8, 10, 8, 30, 0) }));
+
+            Assert.Null(exception);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("HOSTNAME", previousHost);
+            Environment.SetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER", previousContainer);
+            Environment.SetEnvironmentVariable("GYMBEAM_ADMIN_PORT", previousPort);
+        }
+    }
+
+    [Fact]
+    public void TrySendErrorNotification_KeepsThrottleMarkerWhenTelegramFails()
+    {
+        ResetProgramState();
+        ReflectionTestHelper.SetStaticField(typeof(Program), "totalIterationCount", 30L);
+        ReflectionTestHelper.SetStaticField(typeof(Program), "lastErrorNotificationIteration", 0L);
+        var method = ReflectionTestHelper.GetStaticMethod(typeof(Program), "TrySendErrorNotification");
+
+        method.Invoke(null, new object[]
+        {
+            CreateConfigWithInvalidTelegramUrl(),
+            new Exception("expected failure"),
+            "unit test"
+        });
+
+        Assert.Equal(0L, ReflectionTestHelper.GetStaticField(typeof(Program), "lastErrorNotificationIteration"));
+    }
+
+    private static AppConfig CreateConfigWithInvalidTelegramUrl()
+    {
+        return new AppConfig
+        {
+            Telegram = new TelegramSettings
+            {
+                BotToken = new string('x', 70000),
+                ChatId = "chat"
+            }
+        };
     }
 
     private static void ResetProgramState()

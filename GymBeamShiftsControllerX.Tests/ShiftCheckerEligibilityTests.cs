@@ -32,6 +32,7 @@ public class ShiftCheckerEligibilityTests
     [InlineData("invalid")]
     [InlineData("18")]
     [InlineData("aa:bb")]
+    [InlineData("18:aa")]
     public void TryParseShiftStart_InvalidTime_ReturnsFalse(string timeFrom)
     {
         var shift = CreateShift(new DateTime(2026, 6, 19), timeFrom);
@@ -167,6 +168,14 @@ public class ShiftCheckerEligibilityTests
     {
         var shift = CreateEligibleShift(new DateTime(2026, 6, 19), "18:00");
         shift.ButtonElement = null!;
+        Assert.False(InvokeIsRelevant(shift));
+    }
+
+    [Fact]
+    public void IsRelevantShift_SkipsWhenMinuteCannotBeParsed()
+    {
+        var shift = CreateEligibleShift(new DateTime(2026, 6, 19), "18:invalid");
+
         Assert.False(InvokeIsRelevant(shift));
     }
 

@@ -10,6 +10,16 @@ namespace GymBeamShiftsControllerX.Tests;
 public class ShiftCheckerHelperTests
 {
     [Fact]
+    public void ParseDateSet_Null_ReturnsEmptySet()
+    {
+        var method = ReflectionTestHelper.GetStaticMethod(typeof(ShiftChecker), "ParseDateSet");
+
+        var result = (HashSet<DateTime>)method.Invoke(null, new object?[] { null })!;
+
+        Assert.Empty(result);
+    }
+
+    [Fact]
     public void ParseDateSet_ParsesValidDates_AndSkipsInvalid()
     {
         var method = ReflectionTestHelper.GetStaticMethod(typeof(ShiftChecker), "ParseDateSet");
@@ -40,6 +50,16 @@ public class ShiftCheckerHelperTests
     }
 
     [Fact]
+    public void ParseWeekdaySet_Null_ReturnsEmptySet()
+    {
+        var method = ReflectionTestHelper.GetStaticMethod(typeof(ShiftChecker), "ParseWeekdaySet");
+
+        var result = (HashSet<DayOfWeek>)method.Invoke(null, new object?[] { null })!;
+
+        Assert.Empty(result);
+    }
+
+    [Fact]
     public void ParseFavoriteShiftUserPriorities_TrimsSkipsEmptyAndDedupesCaseInsensitive()
     {
         var method = ReflectionTestHelper.GetStaticMethod(typeof(ShiftChecker), "ParseFavoriteShiftUserPriorities");
@@ -52,6 +72,41 @@ public class ShiftCheckerHelperTests
         Assert.Equal(2, result.Count);
         Assert.Equal(0, result["Andrea Pavlíková"]);
         Assert.Equal(1, result["Lukáš Fialek"]);
+    }
+
+    [Fact]
+    public void ParseFavoriteShiftUserPriorities_Null_ReturnsEmptyDictionary()
+    {
+        var method = ReflectionTestHelper.GetStaticMethod(typeof(ShiftChecker), "ParseFavoriteShiftUserPriorities");
+
+        var result = (Dictionary<string, int>)method.Invoke(null, new object?[] { null })!;
+
+        Assert.Empty(result);
+    }
+
+    [Theory]
+    [InlineData("2026-06-20", false, true)]
+    [InlineData("2026-06-21", false, true)]
+    [InlineData("2026-06-17", true, true)]
+    [InlineData("2026-06-17", false, false)]
+    public void IsWeekendOrHoliday_ReturnsExpectedValue(
+        string date,
+        bool includeAsHoliday,
+        bool expected)
+    {
+        var method = ReflectionTestHelper.GetStaticMethod(typeof(ShiftChecker), "IsWeekendOrHoliday");
+        DateTime parsedDate = DateTime.Parse(date, System.Globalization.CultureInfo.InvariantCulture);
+        var holidays = includeAsHoliday
+            ? new HashSet<DateTime> { parsedDate }
+            : new HashSet<DateTime>();
+
+        var result = (bool)method.Invoke(null, new object[]
+        {
+            new ShiftEntry { Date = parsedDate },
+            holidays
+        })!;
+
+        Assert.Equal(expected, result);
     }
 
     [Fact]
@@ -80,6 +135,31 @@ public class ShiftCheckerHelperTests
         var result = Prioritize(Array.Empty<string>(), shifts);
 
         Assert.Equal(shifts.Select(s => s.UserId).ToArray(), result.Select(s => s.UserId).ToArray());
+    }
+
+    [Fact]
+    public void PrioritizeShiftsByFavoriteUsers_NullShifts_ReturnsEmptyList()
+    {
+        var method = ReflectionTestHelper.GetStaticMethod(typeof(ShiftChecker), "PrioritizeShiftsByFavoriteUsers");
+
+        var result = (List<ShiftEntry>)method.Invoke(null, new object?[]
+        {
+            null,
+            new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase) { ["Favorite"] = 0 }
+        })!;
+
+        Assert.Empty(result);
+    }
+
+    [Fact]
+    public void PrioritizeShiftsByFavoriteUsers_NullPriorities_KeepsOriginalOrder()
+    {
+        var shifts = CreateSampleShifts();
+        var method = ReflectionTestHelper.GetStaticMethod(typeof(ShiftChecker), "PrioritizeShiftsByFavoriteUsers");
+
+        var result = (List<ShiftEntry>)method.Invoke(null, new object?[] { shifts, null })!;
+
+        Assert.Same(shifts, result);
     }
 
     [Fact]

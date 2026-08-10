@@ -216,6 +216,62 @@ public class ConfigurationLoaderTests
     }
 
     [Fact]
+    public void ResolveValue_Null_ReturnsEmptyString()
+    {
+        var method = ReflectionTestHelper.GetStaticMethod(typeof(ConfigurationLoader), "ResolveValue");
+
+        var result = (string)method.Invoke(null, new object?[] { null })!;
+
+        Assert.Equal(string.Empty, result);
+    }
+
+    [Fact]
+    public void ResolveValue_ReturnsEmpty_WhenPlaceholderEnvironmentVariableMissing()
+    {
+        string key = $"GYMBEAM_MISSING_{Guid.NewGuid():N}";
+        Environment.SetEnvironmentVariable(key, null);
+        var method = ReflectionTestHelper.GetStaticMethod(typeof(ConfigurationLoader), "ResolveValue");
+
+        var result = (string)method.Invoke(null, new object[] { $"${{{key}}}" })!;
+
+        Assert.Equal(string.Empty, result);
+    }
+
+    [Theory]
+    [InlineData(null, "fallback")]
+    [InlineData("   ", "fallback")]
+    [InlineData("configured", "configured")]
+    public void GetEnvOrDefault_UsesNonBlankEnvironmentValue(
+        string? environmentValue,
+        string expected)
+    {
+        string key = $"GYMBEAM_DEFAULT_{Guid.NewGuid():N}";
+        var method = ReflectionTestHelper.GetStaticMethod(typeof(ConfigurationLoader), "GetEnvOrDefault");
+        try
+        {
+            Environment.SetEnvironmentVariable(key, environmentValue);
+
+            var result = (string)method.Invoke(null, new object[] { key, "fallback" })!;
+
+            Assert.Equal(expected, result);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable(key, null);
+        }
+    }
+
+    [Fact]
+    public void FindOptionalFilePath_ReturnsNullForMissingFile()
+    {
+        var method = ReflectionTestHelper.GetStaticMethod(typeof(ConfigurationLoader), "FindOptionalFilePath");
+
+        var result = method.Invoke(null, new object[] { $"missing-{Guid.NewGuid():N}" });
+
+        Assert.Null(result);
+    }
+
+    [Fact]
     public void LoadDotEnvIfExists_ParsesQuotedValuesAndComments()
     {
         string envFileName = $".env.test.{Guid.NewGuid():N}";

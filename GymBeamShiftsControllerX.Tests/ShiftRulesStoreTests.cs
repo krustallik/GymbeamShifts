@@ -11,6 +11,21 @@ namespace GymBeamShiftsControllerX.Tests;
 public class ShiftRulesStoreTests
 {
     [Fact]
+    public void Constructor_WithNullRules_UsesDefaults()
+    {
+        var store = new ShiftRulesStore(null!);
+
+        var snapshot = store.GetSnapshot();
+
+        Assert.False(snapshot.TakeLunch);
+        Assert.Contains("Monday", snapshot.IncludedWeekdays);
+        Assert.Empty(snapshot.StartTimesToSkip);
+        Assert.Empty(snapshot.Holidays);
+        Assert.Empty(snapshot.ExcludedDates);
+        Assert.Empty(snapshot.FavoriteShiftUsers);
+    }
+
+    [Fact]
     public void GetSnapshot_ReturnsIsolatedCopy()
     {
         var store = new ShiftRulesStore(new ShiftRulesSettings
@@ -56,6 +71,27 @@ public class ShiftRulesStoreTests
         Assert.Equal(new[] { "2026-05-01" }, snapshot.Holidays);
         Assert.Equal(new[] { "2026-04-01" }, snapshot.ExcludedDates);
         Assert.Equal(new[] { "Andrea Pavlíková", "Lukáš Fialek" }, snapshot.FavoriteShiftUsers);
+    }
+
+    [Fact]
+    public void Update_WithNullLists_StoresEmptyLists()
+    {
+        var store = new ShiftRulesStore(new ShiftRulesSettings());
+
+        var snapshot = store.Update(new ShiftRulesUpdateRequest
+        {
+            IncludedWeekdays = null!,
+            StartTimesToSkip = null!,
+            Holidays = null!,
+            ExcludedDates = null!,
+            FavoriteShiftUsers = null!
+        });
+
+        Assert.Empty(snapshot.IncludedWeekdays);
+        Assert.Empty(snapshot.StartTimesToSkip);
+        Assert.Empty(snapshot.Holidays);
+        Assert.Empty(snapshot.ExcludedDates);
+        Assert.Empty(snapshot.FavoriteShiftUsers);
     }
 
     [Fact]
@@ -187,6 +223,61 @@ public class ShiftRulesStoreTests
             {
                 System.IO.File.Delete(path);
             }
+        }
+    }
+
+    [Fact]
+    public void SaveShiftTimingSettings_CreatesTimingSectionWhenMissing()
+    {
+        string fileName = $"appconfig.test.{Guid.NewGuid():N}.json";
+        string path = System.IO.Path.Combine(TestPathHelper.GetWorkspaceRoot(), fileName);
+
+        try
+        {
+            System.IO.File.WriteAllText(path, """
+            {
+              "Auth": {},
+              "Telegram": {},
+              "Timing": null,
+              "ShiftRules": {}
+            }
+            """);
+
+            ConfigurationLoader.SaveShiftTimingSettings(fileName, 72, 24, 6, 45000);
+
+            using var json = JsonDocument.Parse(System.IO.File.ReadAllText(path));
+            var timing = json.RootElement.GetProperty("Timing");
+            Assert.Equal(72, timing.GetProperty("ShiftMinHoursAhead").GetInt32());
+            Assert.Equal(24, timing.GetProperty("WeekendOrHolidayMinHoursAhead").GetInt32());
+            Assert.Equal(6, timing.GetProperty("ImportantShiftNotificationCount").GetInt32());
+            Assert.Equal(45000, timing.GetProperty("ImportantShiftNotificationDelayMilliseconds").GetInt32());
+        }
+        finally
+        {
+            if (System.IO.File.Exists(path)) System.IO.File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public void SaveShiftRules_WithNullRules_WritesDefaultRules()
+    {
+        string fileName = $"appconfig.test.{Guid.NewGuid():N}.json";
+        string path = System.IO.Path.Combine(TestPathHelper.GetWorkspaceRoot(), fileName);
+
+        try
+        {
+            System.IO.File.WriteAllText(path, "{ \"ShiftRules\": {} }");
+
+            ConfigurationLoader.SaveShiftRules(fileName, null!);
+
+            using var json = JsonDocument.Parse(System.IO.File.ReadAllText(path));
+            var rules = json.RootElement.GetProperty("ShiftRules");
+            Assert.False(rules.GetProperty("TakeLunch").GetBoolean());
+            Assert.Equal(2, rules.GetProperty("IncludedWeekdays").GetArrayLength());
+        }
+        finally
+        {
+            if (System.IO.File.Exists(path)) System.IO.File.Delete(path);
         }
     }
 
