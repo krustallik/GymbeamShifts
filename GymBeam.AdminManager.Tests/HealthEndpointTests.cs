@@ -13,6 +13,12 @@ public class HealthEndpointTests
     public async Task GetHealthz_ReturnsOkWithoutAuthentication()
     {
         int port = GetFreePort();
+        string testRoot = Path.Combine(
+            Path.GetTempPath(),
+            $"manager-health-{Guid.NewGuid():N}");
+        string storagePath = Path.Combine(testRoot, "storage");
+        string instancesPath = Path.Combine(testRoot, "instances");
+        Directory.CreateDirectory(instancesPath);
         var security = new AdminSecurityOptions(
             "manager-admin",
             PasswordHasher.Hash("test-password"),
@@ -25,19 +31,26 @@ public class HealthEndpointTests
             port,
             "admin.example.com",
             security,
-            Path.GetTempPath(),
-            Path.GetTempPath());
-        await using WebApplication application = AdminManagerApplication.Build(options);
+            storagePath,
+            instancesPath);
 
-        await application.StartAsync();
-        using var client = new HttpClient { BaseAddress = new Uri($"http://127.0.0.1:{port}") };
-        using HttpResponseMessage response = await client.GetAsync("/healthz");
-        string body = await response.Content.ReadAsStringAsync();
-        using JsonDocument json = JsonDocument.Parse(body);
+        try
+        {
+            await using WebApplication application = AdminManagerApplication.Build(options);
+            await application.StartAsync();
+            using var client = new HttpClient { BaseAddress = new Uri($"http://127.0.0.1:{port}") };
+            using HttpResponseMessage response = await client.GetAsync("/healthz");
+            string body = await response.Content.ReadAsStringAsync();
+            using JsonDocument json = JsonDocument.Parse(body);
 
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        Assert.Equal("application/json", response.Content.Headers.ContentType?.MediaType);
-        Assert.Equal("ok", json.RootElement.GetProperty("status").GetString());
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            Assert.Equal("application/json", response.Content.Headers.ContentType?.MediaType);
+            Assert.Equal("ok", json.RootElement.GetProperty("status").GetString());
+        }
+        finally
+        {
+            Directory.Delete(testRoot, recursive: true);
+        }
     }
 
     private static int GetFreePort()
