@@ -17,6 +17,7 @@ public class AppConfigDefaultsTests
         Assert.Equal(28, cfg.Timing.WeekendOrHolidayMinHoursAhead);
         Assert.Equal(4, cfg.Timing.ImportantShiftNotificationCount);
         Assert.Equal(30000, cfg.Timing.ImportantShiftNotificationDelayMilliseconds);
+        Assert.False(cfg.ShiftRules.TakeLunch);
         Assert.Contains("Monday", cfg.ShiftRules.IncludedWeekdays);
         Assert.Contains("Friday", cfg.ShiftRules.IncludedWeekdays);
         Assert.Empty(cfg.ShiftRules.FavoriteShiftUsers);

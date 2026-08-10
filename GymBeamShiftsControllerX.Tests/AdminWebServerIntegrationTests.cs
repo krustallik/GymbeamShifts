@@ -65,6 +65,7 @@ public class AdminWebServerIntegrationTests : IDisposable
             },
             ShiftRules = new ShiftRulesSettings
             {
+                TakeLunch = false,
                 IncludedWeekdays = new List<string> { "Monday" },
                 FavoriteShiftUsers = new List<string> { "Andrea Pavlíková" }
             }
@@ -184,6 +185,7 @@ public class AdminWebServerIntegrationTests : IDisposable
         using var document = JsonDocument.Parse(json);
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.False(document.RootElement.GetProperty("takeLunch").GetBoolean());
         Assert.Equal(48, document.RootElement.GetProperty("shiftMinHoursAhead").GetInt32());
         Assert.Equal(28, document.RootElement.GetProperty("weekendOrHolidayMinHoursAhead").GetInt32());
         Assert.Equal(4, document.RootElement.GetProperty("importantShiftNotificationCount").GetInt32());
@@ -198,6 +200,7 @@ public class AdminWebServerIntegrationTests : IDisposable
 
         var payload = """
         {
+          "takeLunch": true,
           "shiftMinHoursAhead": 72,
           "weekendOrHolidayMinHoursAhead": 24,
           "importantShiftNotificationCount": 6,
@@ -219,6 +222,7 @@ public class AdminWebServerIntegrationTests : IDisposable
         var json = await getResponse.Content.ReadAsStringAsync();
         using var document = JsonDocument.Parse(json);
 
+        Assert.True(document.RootElement.GetProperty("takeLunch").GetBoolean());
         Assert.Equal(72, document.RootElement.GetProperty("shiftMinHoursAhead").GetInt32());
         Assert.Equal(24, document.RootElement.GetProperty("weekendOrHolidayMinHoursAhead").GetInt32());
         Assert.Equal(6, document.RootElement.GetProperty("importantShiftNotificationCount").GetInt32());
@@ -228,6 +232,7 @@ public class AdminWebServerIntegrationTests : IDisposable
 
         var saved = await File.ReadAllTextAsync(_configPath);
         using var savedJson = JsonDocument.Parse(saved);
+        Assert.True(savedJson.RootElement.GetProperty("ShiftRules").GetProperty("TakeLunch").GetBoolean());
         Assert.Equal(72, savedJson.RootElement.GetProperty("Timing").GetProperty("ShiftMinHoursAhead").GetInt32());
         Assert.Equal(24, savedJson.RootElement.GetProperty("Timing").GetProperty("WeekendOrHolidayMinHoursAhead").GetInt32());
         Assert.Equal(6, savedJson.RootElement.GetProperty("Timing").GetProperty("ImportantShiftNotificationCount").GetInt32());

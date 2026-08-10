@@ -152,12 +152,16 @@ namespace GymBeamShiftsControllerX.Services
                         wait.Until(ExpectedConditions.ElementIsVisible(By.Id(AppConstants.SubscribeModalId)));
                         Logger.Log("Модальное окно открыто.");
 
-                        var lunchNoRadio = wait.Until(
-                            ExpectedConditions.ElementToBeClickable(By.Id(AppConstants.LunchNoRadioId))
+                        string lunchRadioId = rules.TakeLunch
+                            ? AppConstants.LunchYesRadioId
+                            : AppConstants.LunchNoRadioId;
+                        string lunchChoice = rules.TakeLunch ? "yes" : "no";
+                        var lunchRadio = wait.Until(
+                            ExpectedConditions.ElementToBeClickable(By.Id(lunchRadioId))
                         );
-                        Logger.Log("Нажимаем радиокнопку 'Lunch no'.");
-                        lunchNoRadio.Click();
-                        Logger.Log("Радиокнопка 'Lunch no' нажата.");
+                        Logger.Log($"Нажимаем радиокнопку 'Lunch {lunchChoice}'.");
+                        lunchRadio.Click();
+                        Logger.Log($"Радиокнопка 'Lunch {lunchChoice}' нажата.");
 
                         var confirmButton = wait.Until(
                             ExpectedConditions.ElementToBeClickable(By.Id(AppConstants.SubscribeSubmitButtonId))

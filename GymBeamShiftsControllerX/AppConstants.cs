@@ -18,6 +18,7 @@
 
         public const string SubscribeModalId = "modal_subscribe";
         public const string LunchNoRadioId = "lunch_no";
+        public const string LunchYesRadioId = "lunch_yes";
         public const string SubscribeSubmitButtonId = "subscribe_submit";
     }
 }

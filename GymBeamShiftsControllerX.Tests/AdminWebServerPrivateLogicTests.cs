@@ -241,6 +241,7 @@ public class AdminWebServerPrivateLogicTests
             },
             ShiftRules = new ShiftRulesSettings
             {
+                TakeLunch = true,
                 IncludedWeekdays = new List<string> { "Monday" },
                 FavoriteShiftUsers = new List<string> { "Andrea Pavlíková" }
             }
@@ -250,6 +251,7 @@ public class AdminWebServerPrivateLogicTests
         var method = GetInstanceMethod("BuildShiftRulesApiResponse");
         var response = (ShiftRulesApiResponse)method.Invoke(server, null)!;
 
+        Assert.True(response.TakeLunch);
         Assert.Equal(55, response.ShiftMinHoursAhead);
         Assert.Equal(24, response.WeekendOrHolidayMinHoursAhead);
         Assert.Equal(6, response.ImportantShiftNotificationCount);

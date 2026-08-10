@@ -15,6 +15,7 @@ public class ShiftRulesStoreTests
     {
         var store = new ShiftRulesStore(new ShiftRulesSettings
         {
+            TakeLunch = true,
             IncludedWeekdays = new List<string> { "Monday" },
             ExcludedDates = new List<string> { "2026-01-01" },
             FavoriteShiftUsers = new List<string> { "Andrea Pavlíková" }
@@ -27,6 +28,7 @@ public class ShiftRulesStoreTests
 
         var secondSnapshot = store.GetSnapshot();
 
+        Assert.True(secondSnapshot.TakeLunch);
         Assert.Equal(new[] { "Monday" }, secondSnapshot.IncludedWeekdays);
         Assert.Equal(new[] { "2026-01-01" }, secondSnapshot.ExcludedDates);
         Assert.Equal(new[] { "Andrea Pavlíková" }, secondSnapshot.FavoriteShiftUsers);
@@ -39,6 +41,7 @@ public class ShiftRulesStoreTests
 
         store.Update(new ShiftRulesUpdateRequest
         {
+            TakeLunch = true,
             IncludedWeekdays = new List<string> { "Monday", " monday ", "Friday", "" },
             StartTimesToSkip = new List<string> { "22:00", "22:00", " 21:45 " },
             Holidays = new List<string> { "2026-05-01", "2026-05-01" },
@@ -47,6 +50,7 @@ public class ShiftRulesStoreTests
         });
 
         var snapshot = store.GetSnapshot();
+        Assert.True(snapshot.TakeLunch);
         Assert.Equal(new[] { "Monday", "Friday" }, snapshot.IncludedWeekdays);
         Assert.Equal(new[] { "22:00", "21:45" }, snapshot.StartTimesToSkip);
         Assert.Equal(new[] { "2026-05-01" }, snapshot.Holidays);
@@ -97,6 +101,7 @@ public class ShiftRulesStoreTests
 
             ConfigurationLoader.SaveShiftRules(fileName, new ShiftRulesSettings
             {
+                TakeLunch = true,
                 IncludedWeekdays = new List<string> { "Friday" },
                 StartTimesToSkip = new List<string> { "21:45" },
                 Holidays = new List<string> { "2026-05-08" },
@@ -116,6 +121,7 @@ public class ShiftRulesStoreTests
             Assert.Contains("\"2026-05-09\"", updated);
             Assert.Contains("\"FavoriteShiftUsers\": [", updated);
             using var updatedJson = JsonDocument.Parse(updated);
+            Assert.True(updatedJson.RootElement.GetProperty("ShiftRules").GetProperty("TakeLunch").GetBoolean());
             Assert.Equal(
                 "Andrea Pavlíková",
                 updatedJson.RootElement.GetProperty("ShiftRules").GetProperty("FavoriteShiftUsers")[0].GetString());

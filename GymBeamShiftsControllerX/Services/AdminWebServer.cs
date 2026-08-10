@@ -25,6 +25,7 @@ namespace GymBeamShiftsControllerX.Services
 
     public class ShiftRulesUpdateRequest
     {
+        public bool TakeLunch { get; set; } = false;
         public List<string> IncludedWeekdays { get; set; } = new List<string>();
         public List<string> StartTimesToSkip { get; set; } = new List<string>();
         public List<string> Holidays { get; set; } = new List<string>();
@@ -38,6 +39,7 @@ namespace GymBeamShiftsControllerX.Services
 
     public class ShiftRulesApiResponse
     {
+        public bool TakeLunch { get; set; }
         public List<string> IncludedWeekdays { get; set; } = new List<string>();
         public List<string> StartTimesToSkip { get; set; } = new List<string>();
         public List<string> Holidays { get; set; } = new List<string>();
@@ -425,6 +427,7 @@ namespace GymBeamShiftsControllerX.Services
             var rules = _shiftRulesStore.GetSnapshot();
             return new ShiftRulesApiResponse
             {
+                TakeLunch = rules.TakeLunch,
                 IncludedWeekdays = rules.IncludedWeekdays,
                 StartTimesToSkip = rules.StartTimesToSkip,
                 Holidays = rules.Holidays,
@@ -624,6 +627,8 @@ namespace GymBeamShiftsControllerX.Services
     h1, h2 { margin-top: 0; }
     label { display:block; margin: 10px 0 4px; }
     input, textarea, button { width:100%; box-sizing:border-box; border-radius: 8px; border: 1px solid #374151; background:#0b1220; color:#e5e7eb; padding:10px; }
+    input[type='checkbox'] { width:auto; margin-right:8px; }
+    .checkbox-label { display:flex; align-items:center; margin:12px 0; }
     button { background: #2563eb; cursor: pointer; margin-top: 10px; }
     button:hover { background:#1d4ed8; }
     .grid { display:grid; gap:16px; grid-template-columns: 1fr 1fr; }
@@ -653,6 +658,7 @@ namespace GymBeamShiftsControllerX.Services
 
       <div class='card'>
         <h2>Shift Rules</h2>
+        <label class='checkbox-label'><input id='takeLunch' type='checkbox' /> Take lunch</label>
         <label>ShiftMinHoursAhead (hours before shift starts)</label>
         <input id='shiftMinHoursAhead' type='number' min='1' max='720' step='1' />
         <label>WeekendOrHolidayMinHoursAhead</label>
@@ -735,6 +741,7 @@ namespace GymBeamShiftsControllerX.Services
 
     async function loadRules() {
       const rules = await api('/api/shift-rules');
+      document.getElementById('takeLunch').checked = rules.takeLunch ?? false;
       document.getElementById('shiftMinHoursAhead').value = rules.shiftMinHoursAhead ?? 48;
       document.getElementById('weekendOrHolidayMinHoursAhead').value = rules.weekendOrHolidayMinHoursAhead ?? 28;
       document.getElementById('importantShiftNotificationCount').value = rules.importantShiftNotificationCount ?? 4;
@@ -748,6 +755,7 @@ namespace GymBeamShiftsControllerX.Services
 
     async function saveRules() {
       const payload = {
+        takeLunch: document.getElementById('takeLunch').checked,
         shiftMinHoursAhead: Number(document.getElementById('shiftMinHoursAhead').value),
         weekendOrHolidayMinHoursAhead: Number(document.getElementById('weekendOrHolidayMinHoursAhead').value),
         importantShiftNotificationCount: Number(document.getElementById('importantShiftNotificationCount').value),

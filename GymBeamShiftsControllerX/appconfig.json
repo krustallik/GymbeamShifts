@@ -24,6 +24,7 @@
     "ImportantShiftNotificationDelayMilliseconds": 30000
   },
   "ShiftRules": {
+    "TakeLunch": false,
     "StartTimesToSkip": [
       "22:00",
       "21:45"

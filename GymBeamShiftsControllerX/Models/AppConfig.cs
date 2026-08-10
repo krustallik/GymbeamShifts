@@ -45,6 +45,7 @@ namespace GymBeamShiftsControllerX.Models
 
     public class ShiftRulesSettings
     {
+        public bool TakeLunch { get; set; } = false;
         public List<string> StartTimesToSkip { get; set; } = new List<string>();
         public List<string> Holidays { get; set; } = new List<string>();
         public List<string> ExcludedDates { get; set; } = new List<string>();
