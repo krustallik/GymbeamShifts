@@ -32,8 +32,10 @@ public sealed class AdminWebUiValidationTests
         Assert.Contains("@BotFather", html);
         Assert.Contains("/newbot", html);
         Assert.Contains("/start", html);
-        Assert.Contains("@userinfobot", html);
         Assert.Contains("getUpdates", html);
+        Assert.Contains("https://api.telegram.org/botВАШ_ТОКЕН/getUpdates", html);
+        Assert.Contains("result → message → chat → id", html);
+        Assert.DoesNotContain("@userinfobot", html);
         Assert.Contains("id='credentialValidationOverlay'", html);
         Assert.Contains("class='spinner'", html);
         Assert.Contains("Перевіряємо ваші дані", html);

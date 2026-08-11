@@ -73,7 +73,7 @@ public sealed class SafeDockerProvisioner(
                 {
                     $"{hostPath}:/app/instance:ro",
                     $"{hostPath}/.env:/app/instance/.env",
-                    $"{hostPath}/appconfig.json:/app/appconfig.json:ro",
+                    $"{hostPath}/appconfig.json:/app/appconfig.json",
                     $"{hostPath}/runtime-data:/app/runtime-data"
                 },
                 Memory = RequiredMemoryBytes,

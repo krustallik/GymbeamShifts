@@ -1,4 +1,5 @@
 using System.IO;
+using System.Text.Json;
 
 namespace GymBeamShiftsControllerX.Tests;
 
@@ -35,6 +36,34 @@ public class DeploymentConfigurationTests
         Assert.Contains("USER app", dockerfile);
         Assert.Contains("-v \"${ROOT_DIR}/instances:/target\"", deploy);
         Assert.Contains("chown -R app:app /target", deploy);
+    }
+
+    [Fact]
+    public void ProvisionedBots_CanWriteConfigurationAndIncludeSlovakPremiumHolidays()
+    {
+        string provisioner = ReadRootFile(Path.Combine(
+            "GymBeam.AdminManager", "Provisioning", "SafeDockerProvisioner.cs"));
+        string template = ReadRootFile(Path.Combine(
+            "GymBeam.AdminManager", "Provisioning", "bot-appconfig.json"));
+
+        Assert.Contains("appconfig.json:/app/appconfig.json\"", provisioner);
+        Assert.DoesNotContain("appconfig.json:/app/appconfig.json:ro", provisioner);
+
+        using JsonDocument document = JsonDocument.Parse(template);
+        string[] holidays = document.RootElement
+            .GetProperty("ShiftRules")
+            .GetProperty("Holidays")
+            .EnumerateArray()
+            .Select(value => value.GetString()!)
+            .ToArray();
+
+        Assert.Equal(26, holidays.Length);
+        Assert.Contains("2026-05-08", holidays);
+        Assert.Contains("2026-09-15", holidays);
+        Assert.Contains("2027-03-26", holidays);
+        Assert.Contains("2027-03-29", holidays);
+        Assert.DoesNotContain("2026-09-01", holidays);
+        Assert.DoesNotContain("2026-11-17", holidays);
     }
 
     [Fact]
