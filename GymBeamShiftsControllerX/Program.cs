@@ -24,7 +24,7 @@ namespace GymBeamShiftsControllerX
         static void Main(string[] args)
         {
             AppConfig config;
-            var startTime = DateTime.Now;
+            var startTime = UserTime.Now;
 
             try
             {
@@ -75,9 +75,9 @@ namespace GymBeamShiftsControllerX
                 {
                     iterationCount++;
                     totalIterationCount++;
-                    lastIterationAt = DateTime.Now;
+                    lastIterationAt = UserTime.Now;
                     shiftChecker.CheckForShifts();
-                    lastSuccessAt = DateTime.Now;
+                    lastSuccessAt = UserTime.Now;
                 }
                 catch (WebDriverException ex) when (
                     ex.Message.Contains("invalid session id", StringComparison.OrdinalIgnoreCase) ||
@@ -85,7 +85,7 @@ namespace GymBeamShiftsControllerX
                     ex.Message.Contains("not connected to DevTools", StringComparison.OrdinalIgnoreCase))
                 {
                     Logger.Log($"WebDriver упал, перезапуск: {ex.Message}");
-                    lastErrorAt = DateTime.Now;
+                    lastErrorAt = UserTime.Now;
                     lastErrorMessage = ex.Message;
                     TrySendErrorNotification(config, ex, "WebDriver crash");
                     try { browserSession.Quit(); } catch { }
@@ -94,7 +94,7 @@ namespace GymBeamShiftsControllerX
                 catch (Exception ex)
                 {
                     Logger.Log($"Произошла ошибка: {ex.Message}");
-                    lastErrorAt = DateTime.Now;
+                    lastErrorAt = UserTime.Now;
                     lastErrorMessage = ex.Message;
                     TrySendErrorNotification(config, ex, "Runtime error");
                 }
@@ -131,7 +131,7 @@ namespace GymBeamShiftsControllerX
                 }
                 catch (Exception ex)
                 {
-                    lastErrorAt = DateTime.Now;
+                    lastErrorAt = UserTime.Now;
                     lastErrorMessage = ex.Message;
                     Logger.Log($"Не удалось инициализировать браузер. Повтор через 30 секунд: {ex.Message}");
                     TrySendErrorNotification(config, ex, "Browser initialization error");
@@ -151,7 +151,7 @@ namespace GymBeamShiftsControllerX
 
         private static BotStatusSnapshot CreateStatusSnapshot(DateTime startTime, AppConfig config)
         {
-            var now = DateTime.Now;
+            var now = UserTime.Now;
             TimeSpan maxLag = TimeSpan.FromMinutes((config.Timing.CheckIntervalMinutes * 2) + 1);
             bool isRunning = lastIterationAt != DateTime.MinValue && (now - lastIterationAt) <= maxLag;
 
@@ -187,7 +187,7 @@ namespace GymBeamShiftsControllerX
 
         private static void TrySendDailyStatus(AppConfig config, DateTime startTime)
         {
-            var now = DateTime.Now;
+            var now = UserTime.Now;
             if (!ShouldSendDailyStatus(now, lastDailyStatusDate))
             {
                 return;
@@ -223,7 +223,7 @@ namespace GymBeamShiftsControllerX
             string message =
                 "⚠️ Боту не вдалося виконати перевірку\n\n" +
                 "Бот автоматично спробує продовжити роботу. Якщо такі повідомлення повторюються, відкрийте панель і перевірте налаштування GymBeam.\n\n" +
-                $"Час: {DateTime.Now:dd.MM.yyyy HH:mm}";
+                $"Час: {UserTime.Now:dd.MM.yyyy HH:mm}";
 
             if (TrySendTelegram(config, message))
             {

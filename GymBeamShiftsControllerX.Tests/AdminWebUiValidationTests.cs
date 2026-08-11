@@ -34,6 +34,14 @@ public sealed class AdminWebUiValidationTests
         Assert.Contains("/start", html);
         Assert.Contains("@userinfobot", html);
         Assert.Contains("getUpdates", html);
+        Assert.Contains("id='credentialValidationOverlay'", html);
+        Assert.Contains("class='spinner'", html);
+        Assert.Contains("Перевіряємо ваші дані", html);
+        Assert.Contains("overlay.hidden = false", html);
+        Assert.Contains("overlay.hidden = true", html);
+        Assert.Contains("position:fixed", html);
+        Assert.Contains("max-height:calc(100vh - 24px)", html);
+        Assert.Contains("overflow-wrap:anywhere", html);
     }
 
     [Fact]

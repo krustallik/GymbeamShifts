@@ -299,8 +299,8 @@ public class AdminWebServerPrivateLogicTests
 
         try
         {
-            string today = DateTime.Now.ToString("yyyy-MM-dd");
-            string yesterday = DateTime.Now.AddDays(-1).ToString("yyyy-MM-dd");
+            string today = UserTime.Now.ToString("yyyy-MM-dd");
+            string yesterday = UserTime.Now.AddDays(-1).ToString("yyyy-MM-dd");
             File.WriteAllLines(logPath, new[]
             {
                 $"{yesterday} 09:00:00 - old",
@@ -337,7 +337,7 @@ public class AdminWebServerPrivateLogicTests
 
         try
         {
-            string today = DateTime.Now.ToString("yyyy-MM-dd");
+            string today = UserTime.Now.ToString("yyyy-MM-dd");
             File.WriteAllLines(logPath, new[] { $"{today} one", $"{today} two" });
 
             var lines = (List<string>)GetStaticMethod("ReadTodayLogLines").Invoke(null, new object[] { 10 })!;

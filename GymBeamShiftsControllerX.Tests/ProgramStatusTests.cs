@@ -21,12 +21,12 @@ public class ProgramStatusTests
     public void CreateStatusSnapshot_ReturnsRunningTrue_WhenLastIterationRecent()
     {
         ResetProgramState();
-        ReflectionTestHelper.SetStaticField(typeof(Program), "lastIterationAt", DateTime.Now.AddMinutes(-1));
+        ReflectionTestHelper.SetStaticField(typeof(Program), "lastIterationAt", UserTime.Now.AddMinutes(-1));
         ReflectionTestHelper.SetStaticField(typeof(Program), "totalIterationCount", 10L);
 
         var method = ReflectionTestHelper.GetStaticMethod(typeof(Program), "CreateStatusSnapshot");
         var cfg = new AppConfig { Timing = new TimingSettings { CheckIntervalMinutes = 2 } };
-        var snapshot = (BotStatusSnapshot)method.Invoke(null, new object[] { DateTime.Now.AddHours(-1), cfg })!;
+        var snapshot = (BotStatusSnapshot)method.Invoke(null, new object[] { UserTime.Now.AddHours(-1), cfg })!;
 
         Assert.True(snapshot.IsRunning);
         Assert.Equal(10, snapshot.TotalIterations);
@@ -37,11 +37,11 @@ public class ProgramStatusTests
     public void CreateStatusSnapshot_ReturnsRunningFalse_WhenLagTooLarge()
     {
         ResetProgramState();
-        ReflectionTestHelper.SetStaticField(typeof(Program), "lastIterationAt", DateTime.Now.AddMinutes(-30));
+        ReflectionTestHelper.SetStaticField(typeof(Program), "lastIterationAt", UserTime.Now.AddMinutes(-30));
 
         var method = ReflectionTestHelper.GetStaticMethod(typeof(Program), "CreateStatusSnapshot");
         var cfg = new AppConfig { Timing = new TimingSettings { CheckIntervalMinutes = 2 } };
-        var snapshot = (BotStatusSnapshot)method.Invoke(null, new object[] { DateTime.Now.AddHours(-1), cfg })!;
+        var snapshot = (BotStatusSnapshot)method.Invoke(null, new object[] { UserTime.Now.AddHours(-1), cfg })!;
 
         Assert.False(snapshot.IsRunning);
     }
@@ -50,9 +50,9 @@ public class ProgramStatusTests
     public void CreateStatusSnapshot_FormatsSuccessAndErrorState()
     {
         ResetProgramState();
-        DateTime iteration = DateTime.Now.AddMinutes(-1);
-        DateTime success = DateTime.Now.AddMinutes(-2);
-        DateTime error = DateTime.Now.AddMinutes(-3);
+        DateTime iteration = UserTime.Now.AddMinutes(-1);
+        DateTime success = UserTime.Now.AddMinutes(-2);
+        DateTime error = UserTime.Now.AddMinutes(-3);
         ReflectionTestHelper.SetStaticField(typeof(Program), "lastIterationAt", iteration);
         ReflectionTestHelper.SetStaticField(typeof(Program), "lastSuccessAt", success);
         ReflectionTestHelper.SetStaticField(typeof(Program), "lastErrorAt", error);
@@ -60,7 +60,7 @@ public class ProgramStatusTests
 
         var method = ReflectionTestHelper.GetStaticMethod(typeof(Program), "CreateStatusSnapshot");
         var cfg = new AppConfig { Timing = new TimingSettings { CheckIntervalMinutes = 2 } };
-        var snapshot = (BotStatusSnapshot)method.Invoke(null, new object[] { DateTime.Now.AddHours(-1), cfg })!;
+        var snapshot = (BotStatusSnapshot)method.Invoke(null, new object[] { UserTime.Now.AddHours(-1), cfg })!;
 
         Assert.Equal(iteration.ToString("yyyy-MM-dd HH:mm:ss"), snapshot.LastIterationAt);
         Assert.Equal(success.ToString("yyyy-MM-dd HH:mm:ss"), snapshot.LastSuccessAt);
@@ -75,7 +75,7 @@ public class ProgramStatusTests
         var method = ReflectionTestHelper.GetStaticMethod(typeof(Program), "CreateStatusSnapshot");
         var cfg = new AppConfig { Timing = new TimingSettings { CheckIntervalMinutes = 2 } };
 
-        var snapshot = (BotStatusSnapshot)method.Invoke(null, new object[] { DateTime.Now, cfg })!;
+        var snapshot = (BotStatusSnapshot)method.Invoke(null, new object[] { UserTime.Now, cfg })!;
 
         Assert.False(snapshot.IsRunning);
         Assert.Equal(string.Empty, snapshot.LastIterationAt);
@@ -88,7 +88,7 @@ public class ProgramStatusTests
     public void ShouldSendDailyStatus_ReturnsFalse_BeforeDailyTime()
     {
         var method = ReflectionTestHelper.GetStaticMethod(typeof(Program), "ShouldSendDailyStatus");
-        var now = DateTime.Today.AddHours(9);
+        var now = UserTime.Now.Date.AddHours(9);
         var result = (bool)method.Invoke(null, new object[] { now, DateTime.MinValue.Date })!;
         Assert.False(result);
     }
@@ -97,7 +97,7 @@ public class ProgramStatusTests
     public void ShouldSendDailyStatus_ReturnsTrue_AfterDailyTimeWhenNotSentToday()
     {
         var method = ReflectionTestHelper.GetStaticMethod(typeof(Program), "ShouldSendDailyStatus");
-        var now = DateTime.Today.AddHours(11);
+        var now = UserTime.Now.Date.AddHours(11);
         var result = (bool)method.Invoke(null, new object[] { now, DateTime.MinValue.Date })!;
         Assert.True(result);
     }
@@ -106,7 +106,7 @@ public class ProgramStatusTests
     public void ShouldSendDailyStatus_ReturnsFalse_WhenAlreadySentToday()
     {
         var method = ReflectionTestHelper.GetStaticMethod(typeof(Program), "ShouldSendDailyStatus");
-        var now = DateTime.Today.AddHours(11);
+        var now = UserTime.Now.Date.AddHours(11);
         var result = (bool)method.Invoke(null, new object[] { now, now.Date })!;
         Assert.False(result);
     }
@@ -155,12 +155,12 @@ public class ProgramStatusTests
     public void TrySendDailyStatus_DoesNothingWhenAlreadySentToday()
     {
         ResetProgramState();
-        ReflectionTestHelper.SetStaticField(typeof(Program), "lastDailyStatusDate", DateTime.Today);
+        ReflectionTestHelper.SetStaticField(typeof(Program), "lastDailyStatusDate", UserTime.Now.Date);
         var method = ReflectionTestHelper.GetStaticMethod(typeof(Program), "TrySendDailyStatus");
 
-        method.Invoke(null, new object[] { new AppConfig(), DateTime.Now.AddHours(-1) });
+        method.Invoke(null, new object[] { new AppConfig(), UserTime.Now.AddHours(-1) });
 
-        Assert.Equal(DateTime.Today, ReflectionTestHelper.GetStaticField(typeof(Program), "lastDailyStatusDate"));
+        Assert.Equal(UserTime.Now.Date, ReflectionTestHelper.GetStaticField(typeof(Program), "lastDailyStatusDate"));
     }
 
     [Fact]

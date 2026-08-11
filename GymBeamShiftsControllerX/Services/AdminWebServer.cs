@@ -718,7 +718,7 @@ namespace GymBeamShiftsControllerX.Services
                 return new List<string>();
             }
 
-            string prefix = DateTime.Now.ToString("yyyy-MM-dd");
+            string prefix = UserTime.Now.ToString("yyyy-MM-dd");
             var lines = File.ReadLines(path)
                 .Where(line => line.StartsWith(prefix, StringComparison.Ordinal))
                 .ToList();
@@ -757,13 +757,16 @@ namespace GymBeamShiftsControllerX.Services
     .label-row { display:flex; align-items:center; gap:7px; margin:10px 0 4px; }
     .label-row label { margin:0; }
     .help { position:relative; display:inline-grid; place-items:center; width:19px; height:19px; flex:0 0 19px; border:1px solid #60a5fa; border-radius:50%; color:#93c5fd; font-size:12px; font-weight:bold; cursor:help; outline:none; }
-    .help::after { content:attr(data-tip); position:absolute; z-index:20; left:50%; bottom:calc(100% + 9px); width:min(320px,75vw); padding:10px 12px; border:1px solid #4b5563; border-radius:8px; background:#030712; color:#e5e7eb; box-shadow:0 10px 30px #0009; font-size:13px; font-weight:normal; line-height:1.4; opacity:0; visibility:hidden; transform:translate(-50%,5px); transition:.15s; pointer-events:none; }
+    .help::after { content:attr(data-tip); position:fixed; z-index:10000; left:50%; bottom:20px; width:min(420px,calc(100vw - 32px)); max-height:calc(100vh - 40px); overflow-y:auto; box-sizing:border-box; padding:12px 14px; border:1px solid #4b5563; border-radius:10px; background:#030712; color:#e5e7eb; box-shadow:0 14px 45px #000c; font-size:13px; font-weight:normal; line-height:1.45; text-align:left; white-space:normal; overflow-wrap:anywhere; opacity:0; visibility:hidden; transform:translate(-50%,8px); transition:opacity .15s,transform .15s,visibility .15s; pointer-events:none; }
     .help:hover::after,.help:focus::after { opacity:1; visibility:visible; transform:translate(-50%,0); }
     .topbar { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:16px; }
     .topbar h1 { margin:0; }.topbar button { width:auto; margin:0; }
     dialog { width:min(520px,calc(100% - 24px)); padding:0; border:1px solid #374151; border-radius:12px; background:#1f2937; color:#e5e7eb; box-shadow:0 24px 80px #000b; }
     dialog::backdrop { background:#030712cc; }.settings-form{padding:20px}.settings-form h2{margin:0 0 6px}.settings-note{color:#9ca3af;font-size:13px}.dialog-actions{display:flex;gap:10px;margin-top:16px}.dialog-actions button{width:auto;flex:1}.secondary{background:#374151}.configured{color:#86efac}.not-configured{color:#fca5a5}
-    @media(max-width:700px){.grid{grid-template-columns:1fr}.container{margin:16px auto}.help::after{left:auto;right:-8px;transform:translateY(5px)}.help:hover::after,.help:focus::after{transform:translateY(0)}}
+    .validation-overlay { position:fixed; z-index:9999; inset:0; display:flex; align-items:center; justify-content:center; padding:20px; background:#030712e8; backdrop-filter:blur(5px); cursor:wait; }
+    .validation-overlay[hidden] { display:none; }.validation-progress { width:min(430px,100%); padding:30px 24px; border:1px solid #3b82f6; border-radius:16px; background:#111827; box-shadow:0 24px 90px #000; text-align:center; }
+    .spinner { width:54px; height:54px; margin:0 auto 20px; border:5px solid #374151; border-top-color:#3b82f6; border-radius:50%; animation:spin .8s linear infinite; }.validation-progress h2{margin:0 0 10px}.validation-progress p{margin:0;color:#cbd5e1;line-height:1.5}.validation-progress .wait-note{margin-top:12px;color:#93c5fd;font-size:13px}@keyframes spin{to{transform:rotate(360deg)}}@media(prefers-reduced-motion:reduce){.spinner{animation-duration:1.8s}}
+    @media(max-width:700px){.grid{grid-template-columns:1fr}.container{margin:16px auto}.help::after{left:12px;right:12px;bottom:12px;width:auto;max-height:calc(100vh - 24px);font-size:12px;transform:translateY(8px)}.help:hover::after,.help:focus::after{transform:translateY(0)}}
   </style>
 </head>
 <body>
@@ -789,9 +792,9 @@ namespace GymBeamShiftsControllerX.Services
       <div class='card'>
         <h2>Правила вибору змін</h2>
         <label class='checkbox-label'><input id='takeLunch' type='checkbox' /> Брати обід <span class='help' tabindex='0' data-tip='Визначає, чи бот обиратиме варіант зміни з обідньою перервою під час реєстрації.'>?</span></label>
-        <div class='label-row'><label>Мінімум годин до початку зміни</label><span class='help' tabindex='0' data-tip='Бот розглядатиме лише зміни, до початку яких залишилося не менше вказаної кількості годин. Допустиме значення: від 1 до 720.'>?</span></div>
+        <div class='label-row'><label>Мінімум годин до початку зміни</label><span class='help' tabindex='0' data-tip='Бот розглядатиме лише зміни, до початку яких залишилося не менше вказаної кількості годин за місцевим часом Словаччини. Значення є тривалістю, тому додавати різницю часових поясів вручну не потрібно. Допустиме значення: від 1 до 720.'>?</span></div>
         <input id='shiftMinHoursAhead' type='number' min='1' max='720' step='1' required />
-        <div class='label-row'><label>Мінімум годин для вихідних і свят</label><span class='help' tabindex='0' data-tip='Окремий мінімальний запас часу для змін у суботу, неділю або дати зі списку свят. Допустиме значення: від 1 до 720 годин.'>?</span></div>
+        <div class='label-row'><label>Мінімум годин для вихідних і свят</label><span class='help' tabindex='0' data-tip='Окремий мінімальний запас часу для змін у суботу, неділю або дати зі списку свят. Розрахунок виконується за місцевим часом Словаччини; додавати 1 або 2 години вручну не потрібно. Допустиме значення: від 1 до 720 годин.'>?</span></div>
         <input id='weekendOrHolidayMinHoursAhead' type='number' min='1' max='720' step='1' required />
         <div class='label-row'><label>Кількість сповіщень про важливу зміну</label><span class='help' tabindex='0' data-tip='Скільки однакових Telegram-повідомлень надіслати, коли знайдена важлива зміна у вихідний або святковий день. Від 1 до 20.'>?</span></div>
         <input id='importantShiftNotificationCount' type='number' min='1' max='20' step='1' required />
@@ -836,6 +839,14 @@ namespace GymBeamShiftsControllerX.Services
       <div class='dialog-actions'><button type='button' class='secondary' onclick='closeSettings()'>Скасувати</button><button type='submit'>Зберегти</button></div>
     </form>
   </dialog>
+  <div id='credentialValidationOverlay' class='validation-overlay' hidden role='alert' aria-live='assertive' aria-busy='true'>
+    <div class='validation-progress'>
+      <div class='spinner' aria-hidden='true'></div>
+      <h2>Перевіряємо ваші дані</h2>
+      <p>Надсилаємо тестове повідомлення в Telegram і виконуємо пробний вхід у GymBeam.</p>
+      <p class='wait-note'>Будь ласка, не закривайте сторінку. Перевірка може тривати до однієї хвилини.</p>
+    </div>
+  </div>
 
   <script>
     async function api(path, options) {
@@ -1011,7 +1022,12 @@ namespace GymBeamShiftsControllerX.Services
     async function saveUserCredentials(event) {
       event.preventDefault();
       const error = document.getElementById('credentialsError');
+      const overlay = document.getElementById('credentialValidationOverlay');
+      const submitButton = event.currentTarget.querySelector('button[type=submit]');
       error.innerText = '';
+      overlay.hidden = false;
+      submitButton.disabled = true;
+      document.body.setAttribute('aria-busy','true');
       try {
         const result = await api('/api/user-credentials', { method: 'PUT', body: JSON.stringify({
           gymBeamLogin: document.getElementById('gymBeamLogin').value,
@@ -1028,6 +1044,11 @@ namespace GymBeamShiftsControllerX.Services
         if(details) document.getElementById('credentialsValidation').innerText =
           (details.telegramValid?'✅':'❌')+' Telegram: '+(details.telegramMessage||'Не перевірено')+'\n'+
           (details.gymBeamValid?'✅':'❌')+' GymBeam: '+(details.gymBeamMessage||'Не перевірено');
+      }
+      finally {
+        overlay.hidden = true;
+        submitButton.disabled = false;
+        document.body.removeAttribute('aria-busy');
       }
     }
 

@@ -22,7 +22,7 @@ public class LoggerTests
 
             Assert.True(File.Exists(logPath));
             string content = File.ReadAllText(logPath);
-            Assert.Contains(DateTime.Now.ToString("yyyy-MM-dd"), content);
+            Assert.Contains(UserTime.Now.ToString("yyyy-MM-dd"), content);
             Assert.Contains("test message", content);
         }
         finally

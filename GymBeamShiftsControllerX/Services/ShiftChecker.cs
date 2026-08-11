@@ -136,7 +136,7 @@ namespace GymBeamShiftsControllerX.Services
                             includedWeekdays,
                             _config.Timing.ShiftMinHoursAhead,
                             _config.Timing.WeekendOrHolidayMinHoursAhead,
-                            DateTime.Now))
+                            UserTime.Now))
                     {
                         continue;
                     }

@@ -28,7 +28,7 @@ namespace GymBeamShiftsControllerX.Services
 
                     File.AppendAllText(
                         logFilePath,
-                        $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} - {message}{Environment.NewLine}"
+                        $"{UserTime.Now:yyyy-MM-dd HH:mm:ss} - {message}{Environment.NewLine}"
                     );
                 }
                 catch

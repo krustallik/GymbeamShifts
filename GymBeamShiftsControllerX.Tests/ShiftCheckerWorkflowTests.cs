@@ -291,7 +291,7 @@ public sealed class ShiftCheckerWorkflowTests : IDisposable
 
     private static DateTime GetFutureSaturday()
     {
-        DateTime candidate = DateTime.Today.AddDays(2);
+        DateTime candidate = UserTime.Now.Date.AddDays(2);
         while (candidate.DayOfWeek != DayOfWeek.Saturday)
         {
             candidate = candidate.AddDays(1);
@@ -302,7 +302,7 @@ public sealed class ShiftCheckerWorkflowTests : IDisposable
 
     private static DateTime GetFuturePlainWeekday()
     {
-        DateTime candidate = DateTime.Today.AddDays(3);
+        DateTime candidate = UserTime.Now.Date.AddDays(3);
         while (candidate.DayOfWeek is DayOfWeek.Saturday or DayOfWeek.Sunday)
         {
             candidate = candidate.AddDays(1);

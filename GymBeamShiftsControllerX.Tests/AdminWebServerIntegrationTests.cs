@@ -387,8 +387,8 @@ public class AdminWebServerIntegrationTests : IDisposable
     {
         await LoginAsync("testadmin", "testpass");
         string logPath = Environment.GetEnvironmentVariable("GYMBEAM_LOG_PATH")!;
-        string today = DateTime.Now.ToString("yyyy-MM-dd");
-        string yesterday = DateTime.Now.AddDays(-1).ToString("yyyy-MM-dd");
+        string today = UserTime.Now.ToString("yyyy-MM-dd");
+        string yesterday = UserTime.Now.AddDays(-1).ToString("yyyy-MM-dd");
         await File.WriteAllLinesAsync(logPath, new[]
         {
             $"{yesterday} 10:00:00 - old",

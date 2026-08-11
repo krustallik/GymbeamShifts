@@ -5,6 +5,8 @@ namespace GymBeam.AdminManager.Dashboard;
 
 public static class DashboardHtmlRenderer
 {
+    private static readonly TimeZoneInfo UserTimeZone = ResolveUserTimeZone();
+
     public static string Render(IReadOnlyList<BotDashboardItem> bots)
     {
         var html = new StringBuilder(
@@ -229,6 +231,20 @@ public static class DashboardHtmlRenderer
 
     private static string FormatTimestamp(DateTimeOffset? value)
     {
-        return value?.ToUniversalTime().ToString("yyyy-MM-dd HH:mm:ss 'UTC'") ?? "unknown";
+        return value is null
+            ? "unknown"
+            : TimeZoneInfo.ConvertTime(value.Value, UserTimeZone).ToString("yyyy-MM-dd HH:mm:ss");
+    }
+
+    private static TimeZoneInfo ResolveUserTimeZone()
+    {
+        try
+        {
+            return TimeZoneInfo.FindSystemTimeZoneById("Europe/Bratislava");
+        }
+        catch (TimeZoneNotFoundException)
+        {
+            return TimeZoneInfo.FindSystemTimeZoneById("Central Europe Standard Time");
+        }
     }
 }

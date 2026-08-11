@@ -45,6 +45,25 @@ public class DashboardHtmlRendererTests
     }
 
     [Fact]
+    public void Render_DisplaysRuntimeTimestampInBratislavaTime()
+    {
+        var item = new BotDashboardItem(
+            "bot1",
+            "Bot One",
+            Enabled: true,
+            State: "running",
+            Health: "healthy",
+            Uptime: null,
+            LastUpdatedAtUtc: new DateTimeOffset(2026, 8, 11, 15, 16, 0, TimeSpan.Zero),
+            Availability: "available");
+
+        string html = DashboardHtmlRenderer.Render([item]);
+
+        Assert.Contains("2026-08-11 17:16:00", html);
+        Assert.DoesNotContain("15:16:00 UTC", html);
+    }
+
+    [Fact]
     public void Render_ProvidesExplicitLifecycleActionsAndUsesTextContentForResults()
     {
         var item = new BotDashboardItem(
