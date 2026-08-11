@@ -11,7 +11,8 @@ public sealed class BotProvisioningService(
     AuditLogger audit,
     BotOperationCoordinator coordinator,
     TimeProvider timeProvider,
-    string baseDomain)
+    string baseDomain,
+    string instancesRoot)
 {
     public async Task<ProvisioningResult> ProvisionAsync(
         ProvisionBotRequest request,
@@ -69,7 +70,9 @@ public sealed class BotProvisioningService(
 
         try
         {
-            await registry.AddActiveAsync(spec.ToManagedBot(timeProvider.GetUtcNow()), cancellationToken);
+            await registry.AddActiveAsync(
+                spec.ToManagedBot(timeProvider.GetUtcNow(), instancesRoot),
+                cancellationToken);
         }
         catch (Exception) when (!cancellationToken.IsCancellationRequested)
         {

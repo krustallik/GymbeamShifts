@@ -23,12 +23,12 @@ public sealed record ProvisioningSpec(
     string ContainerName,
     string InstancePath)
 {
-    public ManagedBot ToManagedBot(DateTimeOffset now) => new(
+    public ManagedBot ToManagedBot(DateTimeOffset now, string instancesRoot) => new(
         BotId,
         DisplayName,
         ComposeServiceName,
         ContainerName,
-        InstancePath,
+        Path.Combine(Path.GetFullPath(instancesRoot), BotId),
         Enabled: true,
         RegistrationSource: "provision",
         CreatedAtUtc: now,

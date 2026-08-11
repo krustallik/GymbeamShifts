@@ -167,7 +167,8 @@ public static class AdminManagerApplication
             serviceProvider.GetRequiredService<AuditLogger>(),
             serviceProvider.GetRequiredService<BotOperationCoordinator>(),
             timeProvider,
-            options.Provisioning.BaseDomain));
+            options.Provisioning.BaseDomain,
+            options.InstancesPath));
         builder.Services.AddSingleton<ProvisioningRecoveryService>();
         builder.Services.AddHostedService<ProvisioningRecoveryHostedService>();
         builder.Services.AddSingleton<IBotResidualDataCleaner>(

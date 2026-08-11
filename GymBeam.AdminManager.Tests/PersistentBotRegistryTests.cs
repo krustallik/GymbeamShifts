@@ -81,6 +81,44 @@ public class PersistentBotRegistryTests : IDisposable
     }
 
     [Fact]
+    public async Task ImportAsync_MigratesProvisionedBotRelativeInstancePath()
+    {
+        string instancesPath = CreateExistingInstances();
+        string dynamicPath = Path.Combine(instancesPath, "bot-ihor");
+        Directory.CreateDirectory(dynamicPath);
+        string storagePath = Path.Combine(_directory, "storage");
+        var registry = new PersistentBotRegistry(Path.Combine(storagePath, "bots.json"), _clock);
+        DateTimeOffset now = _clock.GetUtcNow();
+        await registry.AddActiveAsync(new ManagedBot(
+            "bot-ihor",
+            "Bot Ihor",
+            "gymbeam-bot-bot-ihor",
+            "gymbeam-shifts-bot-ihor",
+            "bot-ihor",
+            Enabled: true,
+            RegistrationSource: "provision",
+            CreatedAtUtc: now,
+            UpdatedAtUtc: now)
+        {
+            PublicHost = "bot-ihor.mapa-svietidiel.sk"
+        });
+        var importer = new ExistingBotsImporter(
+            instancesPath,
+            "mapa-svietidiel.sk",
+            registry,
+            new AuditLogger(Path.Combine(storagePath, "audit.jsonl"), _clock));
+
+        await importer.ImportAsync();
+
+        ManagedBot migrated = Assert.Single(
+            await registry.GetAllAsync(),
+            bot => bot.Id == "bot-ihor");
+        Assert.Equal(Path.GetFullPath(dynamicPath), migrated.InstancePath);
+        string audit = await File.ReadAllTextAsync(Path.Combine(storagePath, "audit.jsonl"));
+        Assert.Contains("bot.instance-path.migrate", audit);
+    }
+
+    [Fact]
     public async Task ConcurrentImports_DoNotCreateDuplicatesOrCorruptRegistry()
     {
         string instancesPath = CreateExistingInstances();

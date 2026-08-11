@@ -1,4 +1,5 @@
 using GymBeam.AdminManager.Auditing;
+using GymBeam.AdminManager.Docker;
 
 namespace GymBeam.AdminManager.Registry;
 
@@ -17,6 +18,7 @@ public sealed class ExistingBotsImporter(
     public async Task<IReadOnlyList<ManagedBot>> ImportAsync(CancellationToken cancellationToken = default)
     {
         var imported = new List<ManagedBot>();
+        await MigrateRelativeInstancePathsAsync(cancellationToken);
         foreach (BotTemplate template in Templates)
         {
             string botPath = Path.Combine(instancesPath, template.Id);
@@ -54,6 +56,42 @@ public sealed class ExistingBotsImporter(
 
         return imported;
     }
+
+    private async Task MigrateRelativeInstancePathsAsync(CancellationToken cancellationToken)
+    {
+        string root = Path.GetFullPath(instancesPath);
+        foreach (ManagedBot bot in await registry.GetAllAsync(cancellationToken))
+        {
+            if (Path.IsPathFullyQualified(bot.InstancePath)
+                || !string.Equals(bot.InstancePath, bot.Id, StringComparison.Ordinal)
+                || !BotIdValidator.IsValid(bot.Id))
+            {
+                continue;
+            }
+
+            string correctedPath = Path.GetFullPath(Path.Combine(root, bot.Id));
+            if (!string.Equals(Path.GetDirectoryName(correctedPath), root, PathComparison())
+                || !Directory.Exists(correctedPath))
+            {
+                continue;
+            }
+
+            await registry.UpdateAsync(
+                bot with { InstancePath = correctedPath },
+                cancellationToken);
+            await audit.WriteAsync(
+                "bot.instance-path.migrate",
+                "success",
+                actor: "system",
+                target: bot.Id,
+                remoteAddress: null,
+                cancellationToken);
+        }
+    }
+
+    private static StringComparison PathComparison() => OperatingSystem.IsWindows()
+        ? StringComparison.OrdinalIgnoreCase
+        : StringComparison.Ordinal;
 
     private sealed record BotTemplate(
         string Id,

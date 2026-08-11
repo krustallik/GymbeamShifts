@@ -27,6 +27,7 @@ public class BotProvisioningServiceTests : IDisposable
         Assert.True(bot.Enabled);
         Assert.Equal("active", bot.LifecycleState);
         Assert.Equal("bot3.mapa-svietidiel.sk", bot.PublicHost);
+        Assert.Equal(Path.Combine(Path.GetFullPath(_directory), "bot3"), bot.InstancePath);
         Assert.DoesNotContain("secret", result.ToString(), StringComparison.OrdinalIgnoreCase);
     }
 
@@ -152,7 +153,7 @@ public class BotProvisioningServiceTests : IDisposable
         var registry = new MutableRegistry();
         ProvisioningSpec spec = ProvisioningValidation.Validate(ValidRequest(), "mapa-svietidiel.sk");
         await transactions.BeginAsync(spec);
-        await registry.AddActiveAsync(spec.ToManagedBot(TimeProvider.System.GetUtcNow()));
+        await registry.AddActiveAsync(spec.ToManagedBot(TimeProvider.System.GetUtcNow(), _directory));
         var recovery = new ProvisioningRecoveryService(
             registry,
             resources,
@@ -171,7 +172,7 @@ public class BotProvisioningServiceTests : IDisposable
     {
         var registry = new MutableRegistry();
         ProvisioningSpec spec = ProvisioningValidation.Validate(ValidRequest(), "mapa-svietidiel.sk");
-        await registry.AddActiveAsync(spec.ToManagedBot(TimeProvider.System.GetUtcNow()));
+        await registry.AddActiveAsync(spec.ToManagedBot(TimeProvider.System.GetUtcNow(), _directory));
         var resources = new RecordingResources();
         BotProvisioningService service = CreateService(resources, registry);
 
@@ -193,7 +194,8 @@ public class BotProvisioningServiceTests : IDisposable
             new AuditLogger(Path.Combine(_directory, "audit.jsonl"), TimeProvider.System),
             new BotOperationCoordinator(),
             TimeProvider.System,
-            "mapa-svietidiel.sk");
+            "mapa-svietidiel.sk",
+            _directory);
 
     private static ProvisionBotRequest ValidRequest() => new(
         "bot3",
