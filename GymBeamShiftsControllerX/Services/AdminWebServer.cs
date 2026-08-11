@@ -761,9 +761,9 @@ namespace GymBeamShiftsControllerX.Services
     .help:hover::after,.help:focus::after { opacity:1; visibility:visible; transform:translate(-50%,0); }
     .topbar { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:16px; }
     .topbar h1 { margin:0; }.topbar button { width:auto; margin:0; }
-    dialog { width:min(520px,calc(100% - 24px)); padding:0; border:1px solid #374151; border-radius:12px; background:#1f2937; color:#e5e7eb; box-shadow:0 24px 80px #000b; }
+    dialog { position:relative; width:min(520px,calc(100% - 24px)); padding:0; border:1px solid #374151; border-radius:12px; background:#1f2937; color:#e5e7eb; box-shadow:0 24px 80px #000b; }
     dialog::backdrop { background:#030712cc; }.settings-form{padding:20px}.settings-form h2{margin:0 0 6px}.settings-note{color:#9ca3af;font-size:13px}.dialog-actions{display:flex;gap:10px;margin-top:16px}.dialog-actions button{width:auto;flex:1}.secondary{background:#374151}.configured{color:#86efac}.not-configured{color:#fca5a5}
-    .validation-overlay { position:fixed; z-index:9999; inset:0; display:flex; align-items:center; justify-content:center; padding:20px; background:#030712e8; backdrop-filter:blur(5px); cursor:wait; }
+    .validation-overlay { position:absolute; z-index:9999; inset:0; display:flex; align-items:center; justify-content:center; padding:20px; border-radius:inherit; background:#030712f2; backdrop-filter:blur(5px); cursor:wait; }
     .validation-overlay[hidden] { display:none; }.validation-progress { width:min(430px,100%); padding:30px 24px; border:1px solid #3b82f6; border-radius:16px; background:#111827; box-shadow:0 24px 90px #000; text-align:center; }
     .spinner { width:54px; height:54px; margin:0 auto 20px; border:5px solid #374151; border-top-color:#3b82f6; border-radius:50%; animation:spin .8s linear infinite; }.validation-progress h2{margin:0 0 10px}.validation-progress p{margin:0;color:#cbd5e1;line-height:1.5}.validation-progress .wait-note{margin-top:12px;color:#93c5fd;font-size:13px}@keyframes spin{to{transform:rotate(360deg)}}@media(prefers-reduced-motion:reduce){.spinner{animation-duration:1.8s}}
     @media(max-width:700px){.grid{grid-template-columns:1fr}.container{margin:16px auto}.help::after{left:12px;right:12px;bottom:12px;width:auto;max-height:calc(100vh - 24px);font-size:12px;transform:translateY(8px)}.help:hover::after,.help:focus::after{transform:translateY(0)}}
@@ -838,15 +838,15 @@ namespace GymBeamShiftsControllerX.Services
       <div id='credentialsValidation' class='settings-note' role='status' aria-live='polite'></div>
       <div class='dialog-actions'><button type='button' class='secondary' onclick='closeSettings()'>Скасувати</button><button type='submit'>Зберегти</button></div>
     </form>
-  </dialog>
-  <div id='credentialValidationOverlay' class='validation-overlay' hidden role='alert' aria-live='assertive' aria-busy='true'>
+    <div id='credentialValidationOverlay' class='validation-overlay' hidden role='alert' aria-live='assertive' aria-busy='true'>
     <div class='validation-progress'>
       <div class='spinner' aria-hidden='true'></div>
       <h2>Перевіряємо ваші дані</h2>
       <p>Надсилаємо тестове повідомлення в Telegram і виконуємо пробний вхід у GymBeam.</p>
       <p class='wait-note'>Будь ласка, не закривайте сторінку. Перевірка може тривати до однієї хвилини.</p>
     </div>
-  </div>
+    </div>
+  </dialog>
 
   <script>
     async function api(path, options) {
@@ -1017,7 +1017,14 @@ namespace GymBeamShiftsControllerX.Services
       document.getElementById('settingsDialog').showModal();
     }
 
-    function closeSettings() { document.getElementById('settingsDialog').close(); }
+    let credentialsValidationInProgress = false;
+    const settingsDialog = document.getElementById('settingsDialog');
+    settingsDialog.addEventListener('cancel', event => {
+      if (credentialsValidationInProgress) event.preventDefault();
+    });
+    function closeSettings() {
+      if (!credentialsValidationInProgress) settingsDialog.close();
+    }
 
     async function saveUserCredentials(event) {
       event.preventDefault();
@@ -1025,6 +1032,7 @@ namespace GymBeamShiftsControllerX.Services
       const overlay = document.getElementById('credentialValidationOverlay');
       const submitButton = event.currentTarget.querySelector('button[type=submit]');
       error.innerText = '';
+      credentialsValidationInProgress = true;
       overlay.hidden = false;
       submitButton.disabled = true;
       document.body.setAttribute('aria-busy','true');
@@ -1047,6 +1055,7 @@ namespace GymBeamShiftsControllerX.Services
       }
       finally {
         overlay.hidden = true;
+        credentialsValidationInProgress = false;
         submitButton.disabled = false;
         document.body.removeAttribute('aria-busy');
       }

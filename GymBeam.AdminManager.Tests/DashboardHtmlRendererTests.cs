@@ -119,7 +119,7 @@ public class DashboardHtmlRendererTests
         Assert.DoesNotContain("name=\"telegramBotToken\"", html);
         Assert.Contains("name=\"botAdminTokenSecret\"", html);
         Assert.Contains("Blank fields remain unchanged", html);
-        Assert.DoesNotContain("value=", html, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(" value=", html, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("placeholder=\"existing", html, StringComparison.OrdinalIgnoreCase);
     }
 
@@ -132,11 +132,18 @@ public class DashboardHtmlRendererTests
         Assert.DoesNotContain("name=\"telegramToken\"", html);
         Assert.DoesNotContain("name=\"gymBeamLogin\"", html);
         Assert.Contains("name=\"botAdminUsername\"", html);
+        Assert.Contains("Lowercase letters, numbers and hyphens only", html);
+        Assert.Contains("Enter only the prefix, not the full address", html);
+        Assert.Contains("openssl rand -base64 32", html);
+        Assert.Contains("input.value.trim().toLowerCase()", html);
+        Assert.Contains("toLowerCase().replace(/_/g,'-')", html);
+        Assert.Contains("do not use spaces or underscores", html);
+        Assert.Contains("Some fields are invalid", html);
         Assert.Contains("data-action=\"enable\"", DashboardHtmlRenderer.Render([Item()]));
         Assert.Contains("data-action=\"disable\"", DashboardHtmlRenderer.Render([Item()]));
         Assert.Contains("data-action=\"delete\"", DashboardHtmlRenderer.Render([Item()]));
         Assert.Contains("DELETE ", DashboardHtmlRenderer.Render([Item()]));
-        Assert.DoesNotContain("value=", html, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(" value=", html, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]

@@ -39,7 +39,12 @@ public sealed class AdminWebUiValidationTests
         Assert.Contains("Перевіряємо ваші дані", html);
         Assert.Contains("overlay.hidden = false", html);
         Assert.Contains("overlay.hidden = true", html);
-        Assert.Contains("position:fixed", html);
+        Assert.True(
+            html.IndexOf("id='credentialValidationOverlay'", StringComparison.Ordinal)
+            < html.IndexOf("</dialog>", StringComparison.Ordinal));
+        Assert.Contains("credentialsValidationInProgress", html);
+        Assert.Contains("event.preventDefault()", html);
+        Assert.Contains(".validation-overlay { position:absolute", html);
         Assert.Contains("max-height:calc(100vh - 24px)", html);
         Assert.Contains("overflow-wrap:anywhere", html);
     }

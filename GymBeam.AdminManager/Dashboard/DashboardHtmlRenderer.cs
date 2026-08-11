@@ -27,7 +27,7 @@ public static class DashboardHtmlRenderer
                 .container{width:min(1440px,100%);margin:auto;padding:24px 20px 48px}.topbar{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:24px}.eyebrow{margin:0 0 5px;color:#60a5fa;font-size:.75rem;font-weight:700;letter-spacing:.12em;text-transform:uppercase}h1{margin:0;font-size:clamp(1.65rem,4vw,2.35rem)}.subtitle{margin:.45rem 0 0;color:var(--muted)}
                 .panel{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:18px;box-shadow:0 12px 30px #0003}.toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px}.toolbar h2{margin:0;font-size:1.15rem}.bot-count{padding:.35rem .65rem;border-radius:999px;background:#2563eb24;color:#93c5fd;font-size:.8rem;font-weight:700}
                 details{border:1px solid var(--border);border-radius:10px;background:var(--surface-2)}summary{cursor:pointer;padding:13px 15px;font-weight:700;color:#bfdbfe}details[open]>summary{border-bottom:1px solid var(--border)}form{padding:16px}.form-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}label{display:grid;gap:6px;color:#d1d5db;font-size:.86rem;font-weight:600}input{width:100%;border:1px solid var(--border);border-radius:8px;background:#111827;color:var(--text);padding:10px 11px;outline:none}input:focus{border-color:#60a5fa;box-shadow:0 0 0 3px #2563eb33}
-                button{border:1px solid transparent;border-radius:8px;padding:9px 12px;background:var(--blue);color:white;font-weight:700;cursor:pointer;transition:.15s ease}button:hover{background:var(--blue-hover);transform:translateY(-1px)}button:disabled{opacity:.55;cursor:wait;transform:none}.button-secondary{background:#374151}.button-secondary:hover{background:#4b5563}.button-danger{background:#7f1d1d;color:#fecaca}.button-danger:hover{background:#991b1b}.submit-row{display:flex;align-items:center;gap:12px;margin-top:16px}.submit-row button{min-width:150px}.result{color:var(--muted);font-size:.86rem}
+                button{border:1px solid transparent;border-radius:8px;padding:9px 12px;background:var(--blue);color:white;font-weight:700;cursor:pointer;transition:.15s ease}button:hover{background:var(--blue-hover);transform:translateY(-1px)}button:disabled{opacity:.55;cursor:wait;transform:none}.button-secondary{background:#374151}.button-secondary:hover{background:#4b5563}.button-danger{background:#7f1d1d;color:#fecaca}.button-danger:hover{background:#991b1b}.submit-row{display:flex;align-items:center;gap:12px;margin-top:16px}.submit-row button{min-width:150px}.result{color:var(--muted);font-size:.86rem}.field-hint{color:var(--muted);font-size:.75rem;font-weight:400;line-height:1.35}.field-error{color:#fca5a5;font-size:.75rem;font-weight:600}.field-error:empty{display:none}input.input-invalid{border-color:var(--red);box-shadow:0 0 0 3px #ef444433}
                 dialog{width:min(520px,calc(100% - 24px));padding:0;border:1px solid var(--border);border-radius:14px;background:var(--surface);color:var(--text);box-shadow:0 24px 80px #000b}dialog::backdrop{background:#020617cc}.message-form{padding:22px}.message-form h2{margin:0}.message-target{margin:6px 0 18px;color:var(--muted)}textarea{width:100%;min-height:150px;resize:vertical;border:1px solid var(--border);border-radius:8px;background:var(--surface-2);color:var(--text);padding:11px;font:inherit;outline:none}textarea:focus{border-color:#60a5fa;box-shadow:0 0 0 3px #2563eb33}.dialog-actions{display:flex;justify-content:flex-end;gap:9px;margin-top:14px}.dialog-actions button{min-width:110px}
                 .loading-overlay{position:fixed;inset:0;z-index:20000;display:flex;align-items:center;justify-content:center;padding:20px;background:#020617dc;backdrop-filter:blur(4px)}.loading-overlay[hidden]{display:none}.loading-card{width:min(390px,100%);padding:28px 24px;border:1px solid #3b82f6;border-radius:16px;background:#111827;box-shadow:0 24px 80px #000c;text-align:center}.loading-spinner{width:48px;height:48px;margin:0 auto 18px;border:5px solid #334155;border-top-color:#3b82f6;border-radius:50%;animation:spin .8s linear infinite}.loading-card strong{display:block;font-size:1.05rem}.loading-card p{margin:8px 0 0;color:var(--muted);font-size:.9rem}@keyframes spin{to{transform:rotate(360deg)}}
                 .storage-summary{display:inline-flex;align-items:center;padding:.35rem .65rem;border-radius:999px;background:#064e3b55;color:var(--green);font-size:.8rem;font-weight:700}.storage-summary.warning,.metric-value.warning{background:#7f1d1d66;color:#fecaca}.table-wrap{overflow-x:auto;border:1px solid var(--border);border-radius:10px}table{width:100%;border-collapse:collapse;background:var(--surface-2);min-width:1060px}th,td{padding:13px 12px;text-align:left;border-bottom:1px solid #263244;vertical-align:middle}th{background:#172033;color:var(--muted);font-size:.72rem;letter-spacing:.06em;text-transform:uppercase}tbody tr:last-child td{border-bottom:0}tbody tr:hover{background:#162033}.bot-name{font-weight:700}.bot-id{font-family:ui-monospace,monospace;color:var(--muted);font-size:.85rem}.status{display:inline-flex;align-items:center;gap:6px;padding:5px 9px;border-radius:999px;background:#374151;color:#d1d5db;font-size:.78rem;font-weight:700}.status::before{content:'';width:7px;height:7px;border-radius:50%;background:currentColor}.healthy{color:var(--green);background:#064e3b55}.unknown{color:var(--amber);background:#78350f55}.actions{display:flex;flex-wrap:wrap;gap:7px;min-width:310px}.actions button{padding:7px 9px;font-size:.78rem}.operation-result{width:100%;min-height:1rem;color:var(--muted);font-size:.8rem}.bot-logs{width:100%;max-height:280px;overflow:auto;padding:12px;border:1px solid var(--border);border-radius:8px;background:#050a12;color:#cbd5e1;white-space:pre-wrap}.credential-form p{margin-top:0;color:var(--muted);font-size:.85rem}.credential-form{min-width:min(650px,80vw)}
@@ -41,12 +41,12 @@ public static class DashboardHtmlRenderer
                 <div class="toolbar"><h2>Bot instances</h2><div><span class="storage-placeholder"></span> <span class="bot-count">Managed bots</span> <button type="button" id="message-all">Send message to all</button></div></div>
                 <details><summary>+ Provision a new bot</summary>
                   <form class="provision-form" autocomplete="off"><div class="form-grid">
-                    <label>Bot ID <input name="botId" required pattern="[a-z][a-z0-9-]{0,63}"></label>
+                    <label>Bot ID <input name="botId" required pattern="[a-z][a-z0-9-]{0,62}[a-z0-9]|[a-z]" aria-describedby="bot-id-hint bot-id-error"><span class="field-hint" id="bot-id-hint">Lowercase letters, numbers and hyphens only. Example: bot-ihor</span><span class="field-error" id="bot-id-error"></span></label>
                     <label>Display name <input name="displayName" required maxlength="100"></label>
-                    <label>Subdomain <input name="subdomain" required pattern="[a-z][a-z0-9-]{0,63}"></label>
+                    <label>Subdomain <input name="subdomain" required pattern="[a-z][a-z0-9-]{0,62}[a-z0-9]|[a-z]" aria-describedby="subdomain-hint subdomain-error"><span class="field-hint" id="subdomain-hint">Enter only the prefix, not the full address. Example: bot-ihor → bot-ihor.mapa-svietidiel.sk</span><span class="field-error" id="subdomain-error"></span></label>
                     <label>Bot admin username <input name="botAdminUsername" required autocomplete="off"></label>
                     <label>Bot admin password <input type="password" name="botAdminPassword" required autocomplete="new-password"></label>
-                    <label>Bot admin token <input type="password" name="botAdminToken" required autocomplete="new-password"></label>
+                    <label>Bot admin token <input type="password" name="botAdminToken" required autocomplete="new-password"><span class="field-hint">A unique random secret used to sign login sessions. Generate with: openssl rand -base64 32</span></label>
                     </div><div class="submit-row"><button type="submit">Provision bot</button>
                     <div class="provision-result result" role="status" aria-live="polite"></div></div>
                   </form>
@@ -198,6 +198,14 @@ public static class DashboardHtmlRenderer
                 else{hideLoading();}
               }
             });
+            document.addEventListener('input',event=>{
+              const input=event.target.closest('.provision-form input[name="botId"],.provision-form input[name="subdomain"]');
+              if(!input)return;
+              input.value=input.value.toLowerCase().replace(/_/g,'-');
+              input.classList.remove('input-invalid');
+              const error=input.parentElement.querySelector('.field-error');
+              if(error)error.textContent='';
+            });
             document.addEventListener('submit',async event=>{
               const form=event.target.closest('form.credential-form');
               if(!form)return;
@@ -233,6 +241,23 @@ public static class DashboardHtmlRenderer
               event.preventDefault();
               const button=form.querySelector('button[type="submit"]');
               const result=form.querySelector('.provision-result');
+              const identifierPattern=/^[a-z](?:[a-z0-9-]{0,62}[a-z0-9])?$/;
+              const identifierFields=[form.elements.botId,form.elements.subdomain];
+              identifierFields.forEach(input=>{
+                input.value=input.value.trim().toLowerCase();
+                input.classList.remove('input-invalid');
+                const error=input.parentElement.querySelector('.field-error');
+                if(error)error.textContent='';
+              });
+              const invalidField=identifierFields.find(input=>!identifierPattern.test(input.value));
+              if(invalidField){
+                invalidField.classList.add('input-invalid');
+                const error=invalidField.parentElement.querySelector('.field-error');
+                if(error)error.textContent='Use lowercase letters, numbers and hyphens only; do not use spaces or underscores.';
+                result.textContent='Please correct the highlighted field.';
+                invalidField.focus();
+                return;
+              }
               let shouldReload=false;
               button.disabled=true;
               showLoading('Creating bot','Preparing files, container, route and health checks…');
@@ -247,7 +272,9 @@ public static class DashboardHtmlRenderer
                   body:JSON.stringify(payload)
                 });
                 const data=await response.json();
-                result.textContent=data.outcome||(response.ok?'Completed':'Provisioning failed');
+                result.textContent=data.outcome==='invalid_request'
+                  ?'Some fields are invalid. Check the ID, subdomain and required credentials.'
+                  :(data.outcome||(response.ok?'Completed':'Provisioning failed'));
                 if(response.ok&&data.outcome==='succeeded'){form.reset();shouldReload=true;}
               }catch(error){result.textContent='Provisioning failed';}
               finally{
