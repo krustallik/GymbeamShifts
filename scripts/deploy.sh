@@ -11,7 +11,9 @@ if [[ ! "$DOCKER_SOCKET_GID" =~ ^[0-9]+$ ]]; then
 fi
 
 BRANCH="${DEPLOY_BRANCH:-main}"
-BOT_SERVICES=(gymbeam-bot-1 gymbeam-bot-2)
+BOT_INSTANCES=(bot1 bot2)
+BOT_SERVICES=()
+BOT_PUBLIC_HOSTS=()
 DEPLOYMENTS_DIR="${ROOT_DIR}/runtime/deployments"
 DEPLOY_ID="$(date -u +%Y%m%dT%H%M%SZ)-$$"
 SNAPSHOT_DIR="${DEPLOYMENTS_DIR}/${DEPLOY_ID}"
@@ -127,9 +129,23 @@ if [[ ! "${DEPLOY_PREVIOUS_COMMIT:-}" =~ ^[0-9a-fA-F]{40}$ ]]; then
   exit 2
 fi
 
-require_instance_files bot1
-require_instance_files bot2
-mkdir -p instances/bot1/runtime-data instances/bot2/runtime-data backups
+for instance in "${BOT_INSTANCES[@]}"; do
+  instance_path="instances/${instance}"
+  if [[ ! -e "$instance_path" || ! -f "${instance_path}/.env" ]]; then
+    echo "Skipping deleted ${instance}; no managed credentials are present."
+    continue
+  fi
+  if [[ ! -d "$instance_path" ]]; then
+    echo "ERROR: ${instance_path} exists but is not a directory."
+    exit 1
+  fi
+
+  require_instance_files "$instance"
+  mkdir -p "${instance_path}/runtime-data"
+  BOT_SERVICES+=("gymbeam-bot-${instance#bot}")
+  BOT_PUBLIC_HOSTS+=("${instance}.mapa-svietidiel.sk")
+done
+mkdir -p backups
 
 if [[ -L instances || -L runtime/caddy-dynamic || -L runtime/caddy ]]; then
   echo "ERROR: managed runtime roots must not be symbolic links."
@@ -188,10 +204,10 @@ docker compose exec -T caddy caddy reload \
   --address unix//run/caddy-admin/admin.sock \
   --config /etc/caddy/Caddyfile
 
-curl --fail --silent --show-error --retry 12 --retry-delay 5 --retry-all-errors \
-  https://bot1.mapa-svietidiel.sk/healthz >/dev/null
-curl --fail --silent --show-error --retry 12 --retry-delay 5 --retry-all-errors \
-  https://bot2.mapa-svietidiel.sk/healthz >/dev/null
+for public_host in "${BOT_PUBLIC_HOSTS[@]}"; do
+  curl --fail --silent --show-error --retry 12 --retry-delay 5 --retry-all-errors \
+    "https://${public_host}/healthz" >/dev/null
+done
 curl --fail --silent --show-error --retry 12 --retry-delay 5 --retry-all-errors \
   "https://${ADMIN_MANAGER_PUBLIC_HOST:-admin.mapa-svietidiel.sk}/healthz" >/dev/null
 

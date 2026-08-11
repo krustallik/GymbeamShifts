@@ -108,6 +108,24 @@ public class DeploymentConfigurationTests
     }
 
     [Fact]
+    public void Deploy_SkipsPermanentlyDeletedBotInstances()
+    {
+        string deploy = ReadRootFile(Path.Combine("scripts", "deploy.sh"));
+        string compose = ReadRootFile("docker-compose.yml");
+        string caddyService = compose[compose.IndexOf("  caddy:", StringComparison.Ordinal)..];
+
+        Assert.Contains("if [[ ! -e \"$instance_path\" || ! -f \"${instance_path}/.env\" ]]", deploy);
+        Assert.Contains("Skipping deleted ${instance}", deploy);
+        Assert.Contains("BOT_SERVICES+=(\"gymbeam-bot-${instance#bot}\")", deploy);
+        Assert.Contains("for public_host in \"${BOT_PUBLIC_HOSTS[@]}\"", deploy);
+        Assert.DoesNotContain("https://bot1.mapa-svietidiel.sk/healthz", deploy);
+        Assert.DoesNotContain("https://bot2.mapa-svietidiel.sk/healthz", deploy);
+        Assert.DoesNotContain("gymbeam-bot-1:", caddyService);
+        Assert.DoesNotContain("gymbeam-bot-2:", caddyService);
+        Assert.Contains("gymbeam-admin-manager:", caddyService);
+    }
+
+    [Fact]
     public void RuntimeStateIsGitIgnoredButMigrationTemplatesAreTracked()
     {
         string gitIgnore = ReadRootFile(".gitignore");

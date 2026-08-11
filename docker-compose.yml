@@ -122,10 +122,6 @@ services:
     restart: unless-stopped
     logging: *default-logging
     depends_on:
-      gymbeam-bot-1:
-        condition: service_healthy
-      gymbeam-bot-2:
-        condition: service_healthy
       gymbeam-admin-manager:
         condition: service_healthy
     environment:
