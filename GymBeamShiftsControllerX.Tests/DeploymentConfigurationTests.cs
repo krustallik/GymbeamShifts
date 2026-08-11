@@ -25,6 +25,19 @@ public class DeploymentConfigurationTests
     }
 
     [Fact]
+    public void BotImage_RunsAsAppUserAndDeployMigratesLegacyRuntimeOwnership()
+    {
+        string dockerfile = ReadRootFile("Dockerfile");
+        string deploy = ReadRootFile(Path.Combine("scripts", "deploy.sh"));
+
+        Assert.Contains("chown -R app:app /app", dockerfile);
+        Assert.Contains("COPY --from=build --chown=app:app", dockerfile);
+        Assert.Contains("USER app", dockerfile);
+        Assert.Contains("-v \"${ROOT_DIR}/instances:/target\"", deploy);
+        Assert.Contains("chown -R app:app /target", deploy);
+    }
+
+    [Fact]
     public void Caddy_RoutesEachDomainToItsOwnBot()
     {
         string caddyfile = string.Join(

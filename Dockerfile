@@ -27,6 +27,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 ENV CHROME_BIN=/usr/bin/chromium
 ENV DOTNET_EnableDiagnostics=0
 
-COPY --from=build /app/publish .
+RUN mkdir -p /app/runtime-data \
+    && chown -R app:app /app
 
+COPY --from=build --chown=app:app /app/publish .
+
+USER app
 ENTRYPOINT ["dotnet", "GymBeamShiftsControllerX.dll"]

@@ -181,6 +181,11 @@ docker run --rm \
   caddy:2-alpine \
   caddy validate --config /etc/caddy/Caddyfile
 docker compose build gymbeam-bot-1 gymbeam-admin-manager
+docker run --rm --user 0 \
+  -v "${ROOT_DIR}/instances:/target" \
+  --entrypoint /bin/sh \
+  gymbeam-admin-manager:latest \
+  -c 'chown -R app:app /target'
 cp Caddyfile runtime/caddy/.Caddyfile.new
 chmod 644 runtime/caddy/.Caddyfile.new
 mv -f runtime/caddy/.Caddyfile.new runtime/caddy/Caddyfile
