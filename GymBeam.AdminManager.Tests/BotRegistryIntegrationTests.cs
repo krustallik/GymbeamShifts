@@ -55,7 +55,8 @@ public class BotRegistryIntegrationTests : IDisposable
         using HttpResponseMessage arbitraryContainerResponse = await client.SendAsync(arbitraryContainerRequest);
 
         Assert.Equal(HttpStatusCode.Unauthorized, unauthorized.StatusCode);
-        Assert.Equal(HttpStatusCode.Unauthorized, unauthorizedDashboard.StatusCode);
+        Assert.Equal(HttpStatusCode.Redirect, unauthorizedDashboard.StatusCode);
+        Assert.Equal("/login", unauthorizedDashboard.Headers.Location?.OriginalString);
         Assert.Equal(HttpStatusCode.Unauthorized, unauthorizedLifecycle.StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, missingCsrfResponse.StatusCode);
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
@@ -191,7 +192,7 @@ public class BotRegistryIntegrationTests : IDisposable
 
     private static HttpClient CreateClient(WebApplication application)
     {
-        return new HttpClient(new HttpClientHandler { UseCookies = false })
+        return new HttpClient(new HttpClientHandler { UseCookies = false, AllowAutoRedirect = false })
         {
             BaseAddress = new Uri(application.Urls.Single())
         };

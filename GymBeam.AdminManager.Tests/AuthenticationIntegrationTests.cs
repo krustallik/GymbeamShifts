@@ -68,6 +68,26 @@ public class AuthenticationIntegrationTests : IDisposable
     }
 
     [Fact]
+    public async Task Dashboard_WithoutSessionRedirectsToLoginPage()
+    {
+        await using WebApplication application = BuildApplication(GetFreePort());
+        await application.StartAsync();
+        using HttpClient client = CreateClient(application);
+
+        using HttpResponseMessage dashboard = await client.GetAsync("/");
+        using HttpResponseMessage login = await client.GetAsync("/login");
+        string loginHtml = await login.Content.ReadAsStringAsync();
+
+        Assert.Equal(HttpStatusCode.Redirect, dashboard.StatusCode);
+        Assert.Equal("/login", dashboard.Headers.Location?.OriginalString);
+        Assert.Equal(HttpStatusCode.OK, login.StatusCode);
+        Assert.Equal("text/html", login.Content.Headers.ContentType?.MediaType);
+        Assert.Contains("id=\"login-form\"", loginHtml);
+        Assert.Contains("/api/auth/csrf", loginHtml);
+        Assert.Contains("/api/auth/login", loginHtml);
+    }
+
+    [Fact]
     public async Task Logout_RevokesSessionAndExpiresCookie()
     {
         await using WebApplication application = BuildApplication(GetFreePort());
@@ -143,7 +163,7 @@ public class AuthenticationIntegrationTests : IDisposable
     private static HttpClient CreateClient(WebApplication application)
     {
         string address = application.Urls.Single();
-        return new HttpClient(new HttpClientHandler { UseCookies = false })
+        return new HttpClient(new HttpClientHandler { UseCookies = false, AllowAutoRedirect = false })
         {
             BaseAddress = new Uri(address)
         };

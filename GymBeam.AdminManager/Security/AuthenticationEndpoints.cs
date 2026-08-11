@@ -46,6 +46,12 @@ internal static class AuthenticationEndpoints
             SessionTokenPayload? session = await sessions.ValidateAsync(token, context.RequestAborted);
             if (session is null)
             {
+                if (context.Request.Path.Equals("/", StringComparison.Ordinal))
+                {
+                    context.Response.Redirect("/login");
+                    return;
+                }
+
                 context.Response.StatusCode = StatusCodes.Status401Unauthorized;
                 await context.Response.WriteAsJsonAsync(
                     new { error = "Authentication required" },
@@ -89,6 +95,7 @@ internal static class AuthenticationEndpoints
 
     public static void MapAuthenticationEndpoints(this WebApplication application)
     {
+        application.MapGet("/login", () => Results.Content(LoginHtml, "text/html; charset=utf-8"));
         application.MapPost("/api/auth/login", LoginAsync);
         application.MapPost("/api/auth/logout", LogoutAsync);
         application.MapGet("/api/auth/csrf", IssueCsrfAsync);
@@ -258,6 +265,61 @@ internal static class AuthenticationEndpoints
                 && !path.Equals("/api/auth/login", StringComparison.Ordinal)
                 && !path.Equals("/api/auth/csrf", StringComparison.Ordinal));
     }
+
+    private const string LoginHtml = """
+        <!doctype html>
+        <html lang="en">
+        <head>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1">
+          <title>GymBeam Admin Manager - Login</title>
+          <style>
+            body{font-family:system-ui,sans-serif;margin:0;min-height:100vh;display:grid;place-items:center;background:#f6f7f9;color:#172033}
+            main{width:min(22rem,calc(100% - 2rem));padding:2rem;background:white;border-radius:.75rem;box-shadow:0 .5rem 2rem #1720331a}
+            h1{margin-top:0;font-size:1.5rem}label{display:block;margin-top:1rem}input{box-sizing:border-box;width:100%;margin-top:.35rem;padding:.7rem;border:1px solid #cbd5e1;border-radius:.4rem}
+            button{width:100%;margin-top:1.25rem;padding:.75rem;border:0;border-radius:.4rem;background:#172033;color:white;font-weight:600;cursor:pointer}button:disabled{opacity:.6;cursor:wait}
+            #error{min-height:1.25rem;margin-top:1rem;color:#b42318}
+          </style>
+        </head>
+        <body>
+          <main>
+            <h1>GymBeam Admin Manager</h1>
+            <form id="login-form">
+              <label>Username<input name="username" autocomplete="username" required autofocus></label>
+              <label>Password<input type="password" name="password" autocomplete="current-password" required></label>
+              <button type="submit">Login</button>
+              <div id="error" role="alert" aria-live="polite"></div>
+            </form>
+          </main>
+          <script>
+            document.getElementById('login-form').addEventListener('submit',async event=>{
+              event.preventDefault();
+              const form=event.currentTarget;
+              const button=form.querySelector('button');
+              const error=document.getElementById('error');
+              button.disabled=true;error.textContent='';
+              try{
+                const csrfResponse=await fetch('/api/auth/csrf',{credentials:'same-origin'});
+                if(!csrfResponse.ok)throw new Error('Unable to start login');
+                const csrf=await csrfResponse.json();
+                const fields=new FormData(form);
+                const response=await fetch('/api/auth/login',{
+                  method:'POST',credentials:'same-origin',
+                  headers:{'Content-Type':'application/json','X-CSRF-Token':csrf.csrfToken},
+                  body:JSON.stringify({username:fields.get('username'),password:fields.get('password')})
+                });
+                if(!response.ok){
+                  const data=await response.json().catch(()=>({}));
+                  throw new Error(data.error||'Login failed');
+                }
+                location.replace('/');
+              }catch(loginError){error.textContent=loginError.message||'Login failed';}
+              finally{button.disabled=false;}
+            });
+          </script>
+        </body>
+        </html>
+        """;
 
     private static bool RequiresCsrfProtection(HttpRequest request)
     {
