@@ -83,6 +83,9 @@ public class DashboardHtmlRendererTests
         Assert.Contains("data-action=\"restart\"", html);
         Assert.Contains("data-action=\"logs\"", html);
         Assert.Contains("class=\"bot-logs\"", html);
+        Assert.Contains("button.dataset.action!=='logs'&&response.ok", html);
+        Assert.Contains("setTimeout(()=>location.reload(),500)", html);
+        Assert.Contains("No logs yet.", html);
         Assert.Contains("textContent", html);
         Assert.DoesNotContain("innerHTML", html);
     }
@@ -137,6 +140,18 @@ public class DashboardHtmlRendererTests
         Assert.Contains("id=\"message-dialog\"", html);
         Assert.Contains("/telegram-message", html);
         Assert.Contains("/api/bots/telegram-message-all", html);
+    }
+
+    [Fact]
+    public void Render_ShowsStorageUsageAndHighlightsLargeBot()
+    {
+        BotDashboardItem item = Item() with { StorageBytes = 151L * 1024 * 1024 };
+
+        string html = DashboardHtmlRenderer.Render([item]);
+
+        Assert.Contains("Storage: 151.0 MB", html);
+        Assert.Contains("storage-value warning", html);
+        Assert.Contains("<th>Storage</th>", html);
     }
 
     private static BotDashboardItem Item() => new(

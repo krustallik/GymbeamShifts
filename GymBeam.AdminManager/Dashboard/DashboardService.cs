@@ -38,7 +38,32 @@ public sealed class DashboardService(
                 status.Health,
                 status.Uptime,
                 status.LastUpdatedAtUtc,
-                status.Availability);
+                status.Availability,
+                GetDirectorySize(bot.InstancePath));
         }).ToArray();
+    }
+
+    private static long GetDirectorySize(string path)
+    {
+        try
+        {
+            if (!Directory.Exists(path)) return 0;
+            var options = new EnumerationOptions
+            {
+                RecurseSubdirectories = true,
+                IgnoreInaccessible = true,
+                AttributesToSkip = FileAttributes.ReparsePoint
+            };
+            return Directory.EnumerateFiles(path, "*", options)
+                .Sum(file => new FileInfo(file).Length);
+        }
+        catch (IOException)
+        {
+            return 0;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return 0;
+        }
     }
 }

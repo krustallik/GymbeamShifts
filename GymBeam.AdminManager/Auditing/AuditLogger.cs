@@ -6,6 +6,8 @@ namespace GymBeam.AdminManager.Auditing;
 
 public sealed class AuditLogger
 {
+    private const long MaximumAuditBytes = 5L * 1024 * 1024;
+    private const int MaximumAuditFiles = 12;
     private static readonly ConcurrentDictionary<string, SemaphoreSlim> FileLocks = new(
         OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
@@ -51,6 +53,7 @@ public sealed class AuditLogger
             }
 
             StoragePermissions.EnsureDirectory(directory);
+            RotateIfNeeded(serialized.Length + 1);
             await using var stream = new FileStream(
                 _path,
                 FileMode.Append,
@@ -68,6 +71,31 @@ public sealed class AuditLogger
         {
             _fileLock.Release();
         }
+    }
+
+    private void RotateIfNeeded(int incomingBytes)
+    {
+        if (!File.Exists(_path) || new FileInfo(_path).Length + incomingBytes <= MaximumAuditBytes)
+        {
+            return;
+        }
+
+        string directory = Path.GetDirectoryName(_path)!;
+        string baseName = Path.GetFileNameWithoutExtension(_path);
+        string extension = Path.GetExtension(_path);
+        string ArchivePath(int index) => Path.Combine(directory, $"{baseName}.{index}{extension}");
+        int maximumArchive = MaximumAuditFiles - 1;
+
+        string oldest = ArchivePath(maximumArchive);
+        if (File.Exists(oldest)) File.Delete(oldest);
+
+        for (int index = maximumArchive - 1; index >= 1; index--)
+        {
+            string source = ArchivePath(index);
+            if (File.Exists(source)) File.Move(source, ArchivePath(index + 1));
+        }
+
+        File.Move(_path, ArchivePath(1));
     }
 
     private sealed record AuditEvent(

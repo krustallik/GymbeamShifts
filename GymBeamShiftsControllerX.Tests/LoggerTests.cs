@@ -97,6 +97,32 @@ public class LoggerTests
         }
     }
 
+    [Fact]
+    public void Log_RotatesWhenActiveFileReachesTenMegabytes()
+    {
+        string directory = Path.Combine(Path.GetTempPath(), $"gymbeam-log-rotation-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(directory);
+        string logPath = Path.Combine(directory, "app.log");
+        Environment.SetEnvironmentVariable("GYMBEAM_LOG_PATH", logPath);
+        ResetLoggerPath();
+
+        try
+        {
+            using (FileStream stream = File.Create(logPath)) stream.SetLength(10L * 1024 * 1024);
+
+            Logger.Log("after rotation");
+
+            Assert.Equal(10L * 1024 * 1024, new FileInfo(Path.Combine(directory, "app.1.log")).Length);
+            Assert.Contains("after rotation", File.ReadAllText(logPath));
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("GYMBEAM_LOG_PATH", null);
+            ResetLoggerPath();
+            if (Directory.Exists(directory)) Directory.Delete(directory, recursive: true);
+        }
+    }
+
     private static void ResetLoggerPath()
     {
         ReflectionTestHelper.SetStaticField(typeof(Logger), "_logFilePath", null);

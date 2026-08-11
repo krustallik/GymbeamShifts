@@ -80,6 +80,15 @@ public sealed class SafeDockerProvisioner(
                 ShmSize = 256L * 1024 * 1024,
                 NetworkMode = network,
                 Init = true,
+                LogConfig = new
+                {
+                    Type = "json-file",
+                    Config = new Dictionary<string, string>
+                    {
+                        ["max-size"] = "10m",
+                        ["max-file"] = "3"
+                    }
+                },
                 RestartPolicy = new { Name = "unless-stopped", MaximumRetryCount = 0 }
             }
         };

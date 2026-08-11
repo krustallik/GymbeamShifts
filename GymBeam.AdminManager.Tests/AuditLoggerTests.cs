@@ -33,6 +33,20 @@ public class AuditLoggerTests : IDisposable
         });
     }
 
+    [Fact]
+    public async Task WriteAsync_RotatesAuditWhenItReachesFiveMegabytes()
+    {
+        string path = Path.Combine(_directory, "audit.jsonl");
+        Directory.CreateDirectory(_directory);
+        using (FileStream stream = File.Create(path)) stream.SetLength(5L * 1024 * 1024);
+        var logger = new AuditLogger(path, TimeProvider.System);
+
+        await logger.WriteAsync("test.action", "success", "admin", null, "127.0.0.1");
+
+        Assert.Equal(5L * 1024 * 1024, new FileInfo(Path.Combine(_directory, "audit.1.jsonl")).Length);
+        Assert.Single(await File.ReadAllLinesAsync(path));
+    }
+
     public void Dispose()
     {
         if (Directory.Exists(_directory))

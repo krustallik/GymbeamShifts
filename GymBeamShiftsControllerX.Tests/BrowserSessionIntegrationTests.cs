@@ -99,6 +99,42 @@ public sealed class BrowserSessionIntegrationTests
         Assert.Null(session.Driver);
     }
 
+    [Fact]
+    public void CleanupDiagnostics_KeepsOnlyTwentyRecentSetsAndRemovesExpiredSets()
+    {
+        string directory = Path.Combine(Path.GetTempPath(), $"gymbeam-diagnostics-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(directory);
+        try
+        {
+            for (int index = 0; index < 22; index++)
+            {
+                string prefix = Path.Combine(directory, $"login-20260811-1200{index:00}");
+                File.WriteAllText(prefix + ".html", "html");
+                File.WriteAllText(prefix + ".png", "png");
+                DateTime timestamp = DateTime.UtcNow.AddMinutes(-index);
+                File.SetLastWriteTimeUtc(prefix + ".html", timestamp);
+                File.SetLastWriteTimeUtc(prefix + ".png", timestamp);
+            }
+            string expired = Path.Combine(directory, "login-20260101-000000000");
+            File.WriteAllText(expired + ".html", "old");
+            File.WriteAllText(expired + ".png", "old");
+            File.SetLastWriteTimeUtc(expired + ".html", DateTime.UtcNow.AddDays(-15));
+            File.SetLastWriteTimeUtc(expired + ".png", DateTime.UtcNow.AddDays(-15));
+
+            ReflectionTestHelper.GetStaticMethod(typeof(BrowserSession), "CleanupDiagnostics")
+                .Invoke(null, new object[] { directory });
+
+            Assert.Equal(20, Directory.GetFiles(directory, "login-*.html").Length);
+            Assert.Equal(20, Directory.GetFiles(directory, "login-*.png").Length);
+            Assert.False(File.Exists(expired + ".html"));
+            Assert.False(File.Exists(expired + ".png"));
+        }
+        finally
+        {
+            if (Directory.Exists(directory)) Directory.Delete(directory, recursive: true);
+        }
+    }
+
     private static void SetDriver(BrowserSession session, ChromeDriver driver)
     {
         var field = typeof(BrowserSession).GetField(

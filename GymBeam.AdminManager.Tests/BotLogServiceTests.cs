@@ -28,6 +28,34 @@ public class BotLogServiceTests : IDisposable
         Assert.Equal(0, reader.CallCount);
     }
 
+    [Fact]
+    public async Task ReadAsync_ReturnsTailFromPersistentApplicationLogAndRedactsSecrets()
+    {
+        string instancePath = Path.Combine(_directory, "bot1");
+        string runtimePath = Path.Combine(instancePath, "runtime-data");
+        Directory.CreateDirectory(runtimePath);
+        await File.WriteAllLinesAsync(Path.Combine(runtimePath, "app.log"),
+        [
+            "old line",
+            "password=very-secret",
+            "latest line"
+        ]);
+        ManagedBot bot = CreateBot("bot1") with { InstancePath = instancePath };
+        var service = new BotLogService(
+            new FakeRegistry([bot]),
+            new FakeLogReader(),
+            new AuditLogger(Path.Combine(_directory, "audit.jsonl"), TimeProvider.System));
+
+        BotLogView result = await service.ReadAsync("bot1", 2, "admin", "127.0.0.1");
+
+        Assert.Equal("succeeded", result.Outcome);
+        Assert.DoesNotContain("old line", result.Logs);
+        Assert.DoesNotContain("very-secret", result.Logs);
+        Assert.Contains("[REDACTED]", result.Logs);
+        Assert.Contains("latest line", result.Logs);
+        Assert.DoesNotContain("docker logs", result.Logs);
+    }
+
     public void Dispose()
     {
         if (Directory.Exists(_directory))
@@ -52,7 +80,7 @@ public class BotLogServiceTests : IDisposable
             CancellationToken cancellationToken = default)
         {
             Interlocked.Increment(ref CallCount);
-            return Task.FromResult(new DockerLogResult("succeeded", "logs"));
+            return Task.FromResult(new DockerLogResult("succeeded", "docker logs"));
         }
     }
 }

@@ -72,19 +72,27 @@ public sealed class SafeDockerLogReader(
         }
 
         string decoded = TolerantUtf8.GetString(ExtractDockerPayload(response.Bytes));
+        return TryRedact(decoded, out string redacted)
+            ? new DockerLogResult("succeeded", redacted)
+            : new DockerLogResult("redaction_failed", string.Empty);
+    }
+
+    internal static bool TryRedact(string decoded, out string redacted)
+    {
         try
         {
-            string redacted = SensitiveHeader.Replace(decoded, "${prefix}[REDACTED]");
+            redacted = SensitiveHeader.Replace(decoded, "${prefix}[REDACTED]");
             redacted = SensitiveKeyValue.Replace(redacted, "${prefix}[REDACTED]");
             redacted = TelegramToken.Replace(redacted, "[REDACTED]");
             redacted = BearerToken.Replace(redacted, "[REDACTED]");
             redacted = JwtToken.Replace(redacted, "[REDACTED]");
             redacted = TelegramChannelId.Replace(redacted, "[REDACTED]");
-            return new DockerLogResult("succeeded", redacted);
+            return true;
         }
         catch (RegexMatchTimeoutException)
         {
-            return new DockerLogResult("redaction_failed", string.Empty);
+            redacted = string.Empty;
+            return false;
         }
     }
 

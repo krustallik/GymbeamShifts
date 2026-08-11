@@ -38,6 +38,10 @@ public sealed class SafeDockerProvisionerTests
         Assert.Equal(536870912, root.GetProperty("HostConfig").GetProperty("Memory").GetInt64());
         Assert.Equal(268435456, root.GetProperty("HostConfig").GetProperty("ShmSize").GetInt64());
         Assert.Equal("gymbeam-internal", root.GetProperty("HostConfig").GetProperty("NetworkMode").GetString());
+        JsonElement logConfig = root.GetProperty("HostConfig").GetProperty("LogConfig");
+        Assert.Equal("json-file", logConfig.GetProperty("Type").GetString());
+        Assert.Equal("10m", logConfig.GetProperty("Config").GetProperty("max-size").GetString());
+        Assert.Equal("3", logConfig.GetProperty("Config").GetProperty("max-file").GetString());
         Assert.DoesNotContain("caddy", payload.RootElement.ToString(), StringComparison.OrdinalIgnoreCase);
     }
 

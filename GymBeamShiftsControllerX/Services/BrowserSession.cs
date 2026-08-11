@@ -11,6 +11,8 @@ namespace GymBeamShiftsControllerX.Services
 {
     public class BrowserSession
     {
+        private const int MaximumDiagnosticSets = 20;
+        private static readonly TimeSpan DiagnosticRetention = TimeSpan.FromDays(14);
         private readonly AppConfig _config;
         private readonly int _remoteDebuggingPort;
 
@@ -154,6 +156,7 @@ namespace GymBeamShiftsControllerX.Services
 
                 File.WriteAllText(htmlPath, Driver.PageSource);
                 ((ITakesScreenshot)Driver).GetScreenshot().SaveAsFile(screenshotPath);
+                CleanupDiagnostics(diagnosticsDirectory);
 
                 Logger.Log(
                     $"Ошибка входа: {exception.Message}; URL: {Driver.Url}; title: {Driver.Title}; " +
@@ -162,6 +165,30 @@ namespace GymBeamShiftsControllerX.Services
             catch (Exception diagnosticsException)
             {
                 Logger.Log($"Не удалось сохранить диагностику браузера: {diagnosticsException.Message}");
+            }
+        }
+
+        private static void CleanupDiagnostics(string diagnosticsDirectory)
+        {
+            DateTime cutoffUtc = DateTime.UtcNow.Subtract(DiagnosticRetention);
+            var sets = Directory.EnumerateFiles(diagnosticsDirectory, "login-*.*", SearchOption.TopDirectoryOnly)
+                .Where(path => Path.GetExtension(path) is ".html" or ".png")
+                .GroupBy(path => Path.GetFileNameWithoutExtension(path), StringComparer.Ordinal)
+                .Select(group => new
+                {
+                    Files = group.ToArray(),
+                    LastWriteUtc = group.Max(File.GetLastWriteTimeUtc)
+                })
+                .OrderByDescending(set => set.LastWriteUtc)
+                .ToArray();
+
+            foreach (var set in sets.Where((set, index) => index >= MaximumDiagnosticSets
+                || set.LastWriteUtc < cutoffUtc))
+            {
+                foreach (string path in set.Files)
+                {
+                    File.Delete(path);
+                }
             }
         }
 
