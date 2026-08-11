@@ -55,10 +55,6 @@ public sealed class SafeInstanceProvisioner
 
             var credentials = new Dictionary<string, string>(StringComparer.Ordinal)
             {
-                [CredentialKeys.GymBeamLogin] = request.GymBeamLogin,
-                [CredentialKeys.GymBeamPassword] = request.GymBeamPassword,
-                [CredentialKeys.TelegramToken] = request.TelegramToken,
-                [CredentialKeys.TelegramChatId] = request.TelegramChatId,
                 [CredentialKeys.BotAdminUser] = request.BotAdminUsername,
                 [CredentialKeys.BotAdminPassword] = request.BotAdminPassword,
                 [CredentialKeys.BotAdminTokenSecret] = request.BotAdminToken

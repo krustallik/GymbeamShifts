@@ -17,6 +17,7 @@ namespace GymBeamShiftsControllerX
         private static DateTime lastSuccessAt = DateTime.MinValue;
         private static DateTime lastErrorAt = DateTime.MinValue;
         private static string lastErrorMessage = string.Empty;
+        private static int credentialsReloadRequested = 0;
         private const int ErrorNotificationIntervalIterations = 30;
         private static readonly TimeSpan DailyStatusTime = new TimeSpan(10, 30, 0);
 
@@ -27,7 +28,7 @@ namespace GymBeamShiftsControllerX
 
             try
             {
-                config = ConfigurationLoader.Load(AppConstants.ConfigFileName);
+                config = ConfigurationLoader.Load(AppConstants.ConfigFileName, validateRequiredSecrets: false);
                 Logger.Log("Конфигурация успешно загружена.");
             }
             catch (Exception ex)
@@ -39,7 +40,11 @@ namespace GymBeamShiftsControllerX
             var browserSession = new BrowserSession(config);
             var shiftRulesStore = new ShiftRulesStore(config.ShiftRules);
             var shiftChecker = new ShiftChecker(browserSession, config, shiftRulesStore);
-            var adminWeb = new AdminWebServer(config, shiftRulesStore, () => CreateStatusSnapshot(startTime, config));
+            var adminWeb = new AdminWebServer(
+                config,
+                shiftRulesStore,
+                () => CreateStatusSnapshot(startTime, config),
+                credentialsUpdated: () => Interlocked.Exchange(ref credentialsReloadRequested, 1));
             try
             {
                 adminWeb.Start();
@@ -50,11 +55,22 @@ namespace GymBeamShiftsControllerX
                 Console.WriteLine($"Admin Web failed to start: {ex.Message}");
             }
 
+            while (!ConfigurationLoader.HasOperationalCredentials(config))
+            {
+                Thread.Sleep(TimeSpan.FromSeconds(1));
+            }
+
             InitializeBrowserWithRetry(browserSession, config);
             SendStartupNotification(config, startTime);
 
             while (true)
             {
+                if (Interlocked.Exchange(ref credentialsReloadRequested, 0) == 1)
+                {
+                    try { browserSession.Quit(); } catch { }
+                    InitializeBrowserWithRetry(browserSession, config);
+                }
+
                 try
                 {
                     iterationCount++;
@@ -158,19 +174,10 @@ namespace GymBeamShiftsControllerX
 
         private static void SendStartupNotification(AppConfig config, DateTime startTime)
         {
-            string host = Environment.GetEnvironmentVariable("HOSTNAME")
-                ?? Environment.MachineName;
-            bool inContainer = string.Equals(
-                Environment.GetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER"),
-                "true",
-                StringComparison.OrdinalIgnoreCase);
-
             string message =
-                "STARTUP OK\n" +
-                $"Time: {startTime:yyyy-MM-dd HH:mm:ss}\n" +
-                $"Host: {host}\n" +
-                $"Container: {inContainer}\n" +
-                $"Admin port: {Environment.GetEnvironmentVariable("GYMBEAM_ADMIN_PORT") ?? "8080"}";
+                "✅ Бот успішно запущено!\n\n" +
+                "Усі налаштування завантажено. Бот уже перевіряє доступні зміни та повідомить вас, коли знайде відповідний варіант.\n\n" +
+                $"Початок роботи: {startTime:dd.MM.yyyy о HH:mm}";
 
             if (TrySendTelegram(config, message))
             {
@@ -188,10 +195,11 @@ namespace GymBeamShiftsControllerX
 
             var uptime = now - startTime;
             string message =
-                "STATUS OK\n" +
-                $"Time: {now:yyyy-MM-dd HH:mm:ss}\n" +
-                $"Uptime: {uptime.Days}d {uptime.Hours}h {uptime.Minutes}m\n" +
-                $"Iterations total: {totalIterationCount}";
+                "🟢 Бот працює нормально\n\n" +
+                "Це щоденне підтвердження, що бот активний і продовжує шукати зміни.\n\n" +
+                $"Працює без перерви: {uptime.Days} дн. {uptime.Hours} год. {uptime.Minutes} хв.\n" +
+                $"Виконано перевірок: {totalIterationCount}\n" +
+                $"Станом на: {now:dd.MM.yyyy HH:mm}";
 
             if (TrySendTelegram(config, message))
             {
@@ -213,11 +221,9 @@ namespace GymBeamShiftsControllerX
             }
 
             string message =
-                "ERROR ALERT\n" +
-                $"Category: {category}\n" +
-                $"Time: {DateTime.Now:yyyy-MM-dd HH:mm:ss}\n" +
-                $"Iteration: {totalIterationCount}\n" +
-                $"Message: {ex.Message}";
+                "⚠️ Боту не вдалося виконати перевірку\n\n" +
+                "Бот автоматично спробує продовжити роботу. Якщо такі повідомлення повторюються, відкрийте панель і перевірте налаштування GymBeam.\n\n" +
+                $"Час: {DateTime.Now:dd.MM.yyyy HH:mm}";
 
             if (TrySendTelegram(config, message))
             {

@@ -28,6 +28,7 @@ services:
     container_name: gymbeam-shifts-bot-1
     volumes:
       - ./instances/bot1:/app/instance:ro
+      - ./instances/bot1/.env:/app/instance/.env
       - ./instances/bot1/appconfig.json:/app/appconfig.json
       - ./instances/bot1/runtime-data:/app/runtime-data
     labels:
@@ -40,6 +41,7 @@ services:
     container_name: gymbeam-shifts-bot-2
     volumes:
       - ./instances/bot2:/app/instance:ro
+      - ./instances/bot2/.env:/app/instance/.env
       - ./instances/bot2/appconfig.json:/app/appconfig.json
       - ./instances/bot2/runtime-data:/app/runtime-data
     labels:

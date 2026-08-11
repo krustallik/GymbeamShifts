@@ -22,8 +22,11 @@ public sealed class SafeInstanceProvisionerTests : IDisposable
 
         Assert.True(result.Succeeded);
         string env = await File.ReadAllTextAsync(Path.Combine(_root, "bot3", ".env"));
-        Assert.Contains("GYMBEAM_AUTH_LOGIN=\"name=value\"", env, StringComparison.Ordinal);
-        Assert.Contains("GYMBEAM_AUTH_PASSWORD=\" spaces \\\"quotes\\\" Україна \"", env, StringComparison.Ordinal);
+        Assert.DoesNotContain("GYMBEAM_AUTH_LOGIN", env, StringComparison.Ordinal);
+        Assert.DoesNotContain("GYMBEAM_AUTH_PASSWORD", env, StringComparison.Ordinal);
+        Assert.DoesNotContain("GYMBEAM_TELEGRAM_BOT_TOKEN", env, StringComparison.Ordinal);
+        Assert.DoesNotContain("GYMBEAM_TELEGRAM_CHAT_ID", env, StringComparison.Ordinal);
+        Assert.Contains("GYMBEAM_ADMIN_USER=\"admin\"", env, StringComparison.Ordinal);
         Assert.Equal("{\"safe\":true}", await File.ReadAllTextAsync(Path.Combine(_root, "bot3", "appconfig.json")));
         Assert.True(Directory.Exists(Path.Combine(_root, "bot3", "runtime-data")));
     }

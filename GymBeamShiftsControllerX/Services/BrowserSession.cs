@@ -12,12 +12,14 @@ namespace GymBeamShiftsControllerX.Services
     public class BrowserSession
     {
         private readonly AppConfig _config;
+        private readonly int _remoteDebuggingPort;
 
         public ChromeDriver Driver { get; private set; }
 
-        public BrowserSession(AppConfig config)
+        public BrowserSession(AppConfig config, int remoteDebuggingPort = 9222)
         {
             _config = config;
+            _remoteDebuggingPort = remoteDebuggingPort;
         }
 
         public void InitializeDriver()
@@ -55,7 +57,7 @@ namespace GymBeamShiftsControllerX.Services
             options.AddArgument("--disable-software-rasterizer");
             options.AddArgument("--disable-extensions");
             options.AddArgument("--disable-background-networking");
-            options.AddArgument("--remote-debugging-port=9222");
+            options.AddArgument($"--remote-debugging-port={_remoteDebuggingPort}");
             options.AddArgument("--disable-blink-features=AutomationControlled");
 
             var service = ChromeDriverService.CreateDefaultService();

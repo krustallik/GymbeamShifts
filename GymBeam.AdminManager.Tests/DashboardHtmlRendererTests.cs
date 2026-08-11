@@ -84,8 +84,8 @@ public class DashboardHtmlRendererTests
         string html = DashboardHtmlRenderer.Render([item]);
 
         Assert.Contains("class=\"credential-form\"", html);
-        Assert.Contains("name=\"gymBeamPassword\"", html);
-        Assert.Contains("name=\"telegramBotToken\"", html);
+        Assert.DoesNotContain("name=\"gymBeamPassword\"", html);
+        Assert.DoesNotContain("name=\"telegramBotToken\"", html);
         Assert.Contains("name=\"botAdminTokenSecret\"", html);
         Assert.Contains("Blank fields remain unchanged", html);
         Assert.DoesNotContain("value=", html, StringComparison.OrdinalIgnoreCase);
@@ -98,12 +98,26 @@ public class DashboardHtmlRendererTests
         string html = DashboardHtmlRenderer.Render([]);
 
         Assert.Contains("class=\"provision-form\"", html);
-        Assert.Contains("name=\"telegramToken\"", html);
+        Assert.DoesNotContain("name=\"telegramToken\"", html);
+        Assert.DoesNotContain("name=\"gymBeamLogin\"", html);
+        Assert.Contains("name=\"botAdminUsername\"", html);
         Assert.Contains("data-action=\"enable\"", DashboardHtmlRenderer.Render([Item()]));
         Assert.Contains("data-action=\"disable\"", DashboardHtmlRenderer.Render([Item()]));
         Assert.Contains("data-action=\"delete\"", DashboardHtmlRenderer.Render([Item()]));
         Assert.Contains("DELETE ", DashboardHtmlRenderer.Render([Item()]));
         Assert.DoesNotContain("value=", html, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void Render_ProvidesPerBotAndBroadcastTelegramMessageControls()
+    {
+        string html = DashboardHtmlRenderer.Render([Item()]);
+
+        Assert.Contains("data-message-bot=\"bot1\"", html);
+        Assert.Contains("id=\"message-all\"", html);
+        Assert.Contains("id=\"message-dialog\"", html);
+        Assert.Contains("/telegram-message", html);
+        Assert.Contains("/api/bots/telegram-message-all", html);
     }
 
     private static BotDashboardItem Item() => new(

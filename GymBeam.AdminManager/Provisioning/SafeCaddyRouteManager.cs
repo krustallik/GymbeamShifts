@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Text;
+using System.Text.Json;
 
 namespace GymBeam.AdminManager.Provisioning;
 
@@ -138,9 +139,15 @@ public sealed class SafeCaddyRouteManager(
             return ResourceResult.Failure(adapted.Outcome == "ok" ? "caddy_validation_failed" : adapted.Outcome);
         }
 
+        byte[]? configuration = ExtractAdaptedConfiguration(adapted.Body);
+        if (configuration is null)
+        {
+            return ResourceResult.Failure("caddy_invalid_response");
+        }
+
         HttpCallResult loaded = await SendAsync(
             "/load",
-            new ByteArrayContent(adapted.Body)
+            new ByteArrayContent(configuration)
             {
                 Headers = { ContentType = new MediaTypeHeaderValue("application/json") }
             },
@@ -149,6 +156,26 @@ public sealed class SafeCaddyRouteManager(
         return loaded.StatusCode is HttpStatusCode.OK or HttpStatusCode.NoContent
             ? ResourceResult.Success()
             : ResourceResult.Failure(loaded.Outcome == "ok" ? "caddy_reload_failed" : loaded.Outcome);
+    }
+
+    private static byte[]? ExtractAdaptedConfiguration(byte[] response)
+    {
+        try
+        {
+            using JsonDocument document = JsonDocument.Parse(response);
+            if (document.RootElement.ValueKind != JsonValueKind.Object
+                || !document.RootElement.TryGetProperty("result", out JsonElement result)
+                || result.ValueKind != JsonValueKind.Object)
+            {
+                return null;
+            }
+
+            return Encoding.UTF8.GetBytes(result.GetRawText());
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
     }
 
     private async Task<HttpCallResult> SendAsync(

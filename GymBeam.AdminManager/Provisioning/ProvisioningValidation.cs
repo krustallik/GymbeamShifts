@@ -20,10 +20,6 @@ public static partial class ProvisioningValidation
             || request.DisplayName.Length > 100
             || ContainsControl(request.DisplayName)
             || !Domain().IsMatch(baseDomain)
-            || !ValidSecret(request.GymBeamLogin)
-            || !ValidSecret(request.GymBeamPassword)
-            || !ValidSecret(request.TelegramToken)
-            || !ValidSecret(request.TelegramChatId)
             || !ValidSecret(request.BotAdminUsername)
             || !ValidSecret(request.BotAdminPassword)
             || !ValidSecret(request.BotAdminToken))

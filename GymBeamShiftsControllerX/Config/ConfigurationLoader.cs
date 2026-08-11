@@ -14,7 +14,7 @@ namespace GymBeamShiftsControllerX.Config
             WriteIndented = true
         };
 
-        public static AppConfig Load(string fileName)
+        public static AppConfig Load(string fileName, bool validateRequiredSecrets = true)
         {
             LoadDotEnvIfExists();
 
@@ -29,10 +29,79 @@ namespace GymBeamShiftsControllerX.Config
 
             ResolveSecretPlaceholders(config);
             ApplyEnvironmentOverrides(config);
-            ValidateRequiredSecrets(config);
+            if (validateRequiredSecrets)
+            {
+                ValidateRequiredSecrets(config);
+            }
 
             return config;
         }
+
+        public static bool HasOperationalCredentials(AppConfig config)
+        {
+            return !string.IsNullOrWhiteSpace(config.Auth.Login)
+                && !string.IsNullOrWhiteSpace(config.Auth.Password)
+                && !string.IsNullOrWhiteSpace(config.Telegram.BotToken)
+                && !string.IsNullOrWhiteSpace(config.Telegram.ChatId);
+        }
+
+        public static void SaveUserCredentials(
+            string fileName,
+            string gymBeamLogin,
+            string gymBeamPassword,
+            string telegramBotToken,
+            string telegramChatId)
+        {
+            foreach (string value in new[] { gymBeamLogin, gymBeamPassword, telegramBotToken, telegramChatId })
+            {
+                if (string.IsNullOrWhiteSpace(value) || value.Length > 4096
+                    || value.IndexOfAny(new[] { '\r', '\n', '\0' }) >= 0)
+                {
+                    throw new ArgumentException("Credential value is invalid.");
+                }
+            }
+
+            string configuredPath = Environment.GetEnvironmentVariable("GYMBEAM_ENV_PATH") ?? string.Empty;
+            string? envPath = string.IsNullOrWhiteSpace(configuredPath)
+                ? FindOptionalFilePath(".env")
+                : Path.GetFullPath(configuredPath);
+            if (string.IsNullOrWhiteSpace(envPath) || !File.Exists(envPath))
+            {
+                throw new FileNotFoundException("Файл .env для credentials не знайдено.");
+            }
+
+            var updates = new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["GYMBEAM_AUTH_LOGIN"] = gymBeamLogin,
+                ["GYMBEAM_AUTH_PASSWORD"] = gymBeamPassword,
+                ["GYMBEAM_TELEGRAM_BOT_TOKEN"] = telegramBotToken,
+                ["GYMBEAM_TELEGRAM_CHAT_ID"] = telegramChatId
+            };
+            List<string> lines = File.ReadAllLines(envPath).ToList();
+            var found = new HashSet<string>(StringComparer.Ordinal);
+            for (int index = 0; index < lines.Count; index++)
+            {
+                string trimmed = lines[index].Trim();
+                int separator = trimmed.IndexOf('=');
+                if (separator <= 0) continue;
+                string key = trimmed[..separator].Trim();
+                if (!updates.TryGetValue(key, out string? value)) continue;
+                if (!found.Add(key))
+                {
+                    lines.RemoveAt(index--);
+                    continue;
+                }
+                lines[index] = $"{key}={EncodeDotEnvValue(value)}";
+            }
+            foreach ((string key, string value) in updates)
+            {
+                if (!found.Contains(key)) lines.Add($"{key}={EncodeDotEnvValue(value)}");
+            }
+            File.WriteAllLines(envPath, lines);
+        }
+
+        private static string EncodeDotEnvValue(string value) =>
+            $"\"{value.Replace("\\", "\\\\", StringComparison.Ordinal).Replace("\"", "\\\"", StringComparison.Ordinal)}\"";
 
         public static void Save(string fileName, AppConfig config)
         {

@@ -72,6 +72,7 @@ public sealed class SafeDockerProvisioner(
                 Binds = new[]
                 {
                     $"{hostPath}:/app/instance:ro",
+                    $"{hostPath}/.env:/app/instance/.env",
                     $"{hostPath}/appconfig.json:/app/appconfig.json:ro",
                     $"{hostPath}/runtime-data:/app/runtime-data"
                 },

@@ -68,6 +68,8 @@ public class DeploymentConfigurationTests
         Assert.Contains("GYMBEAM_ENV_PATH: /app/instance/.env", common);
         Assert.Contains("./instances/bot1:/app/instance:ro", bot1);
         Assert.Contains("./instances/bot2:/app/instance:ro", bot2);
+        Assert.Contains("./instances/bot1/.env:/app/instance/.env", bot1);
+        Assert.Contains("./instances/bot2/.env:/app/instance/.env", bot2);
         Assert.DoesNotContain("env_file:", bot1);
         Assert.DoesNotContain("env_file:", bot2);
     }

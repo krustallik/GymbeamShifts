@@ -14,6 +14,8 @@ public class DeploymentConfigurationTests
         Assert.Contains("GYMBEAM_ENV_PATH: /app/instance/.env", compose);
         Assert.Contains("./instances/bot1:/app/instance:ro", compose);
         Assert.Contains("./instances/bot2:/app/instance:ro", compose);
+        Assert.Contains("./instances/bot1/.env:/app/instance/.env", compose);
+        Assert.Contains("./instances/bot2/.env:/app/instance/.env", compose);
         Assert.DoesNotContain("env_file:", compose);
         Assert.Contains("./instances/bot1/appconfig.json:/app/appconfig.json", compose);
         Assert.Contains("./instances/bot2/appconfig.json:/app/appconfig.json", compose);

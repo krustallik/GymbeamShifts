@@ -19,6 +19,7 @@ public class AdminWebServerIntegrationTests : IDisposable
 {
     private readonly string _configFileName;
     private readonly string _configPath;
+    private readonly string _credentialsPath;
     private readonly AdminWebServer _server;
     private readonly HttpClient _client;
     private readonly CookieContainer _cookies = new CookieContainer();
@@ -28,12 +29,15 @@ public class AdminWebServerIntegrationTests : IDisposable
     private readonly string _previousPassword;
     private readonly string _previousSecret;
     private readonly string _previousLogPath;
+    private readonly string _previousEnvPath;
+    private int _credentialUpdates;
 
     public AdminWebServerIntegrationTests()
     {
         int port = GetFreePort();
         _configFileName = $"appconfig.admin.{Guid.NewGuid():N}.json";
         _configPath = Path.Combine(TestPathHelper.GetWorkspaceRoot(), _configFileName);
+        _credentialsPath = Path.Combine(Path.GetTempPath(), $"gymbeam-user-credentials-{Guid.NewGuid():N}.env");
 
         _previousPort = Environment.GetEnvironmentVariable("GYMBEAM_ADMIN_PORT") ?? string.Empty;
         _previousHost = Environment.GetEnvironmentVariable("GYMBEAM_ADMIN_HOST") ?? string.Empty;
@@ -41,6 +45,7 @@ public class AdminWebServerIntegrationTests : IDisposable
         _previousPassword = Environment.GetEnvironmentVariable("GYMBEAM_ADMIN_PASSWORD") ?? string.Empty;
         _previousSecret = Environment.GetEnvironmentVariable("GYMBEAM_ADMIN_TOKEN_SECRET") ?? string.Empty;
         _previousLogPath = Environment.GetEnvironmentVariable("GYMBEAM_LOG_PATH") ?? string.Empty;
+        _previousEnvPath = Environment.GetEnvironmentVariable("GYMBEAM_ENV_PATH") ?? string.Empty;
 
         Environment.SetEnvironmentVariable("GYMBEAM_ADMIN_PORT", port.ToString());
         Environment.SetEnvironmentVariable("GYMBEAM_ADMIN_HOST", "localhost");
@@ -48,9 +53,11 @@ public class AdminWebServerIntegrationTests : IDisposable
         Environment.SetEnvironmentVariable("GYMBEAM_ADMIN_PASSWORD", "testpass");
         Environment.SetEnvironmentVariable("GYMBEAM_ADMIN_TOKEN_SECRET", "integration-test-secret");
         Environment.SetEnvironmentVariable("GYMBEAM_LOG_PATH", Path.Combine(Path.GetTempPath(), $"gymbeam-admin-{Guid.NewGuid():N}.log"));
+        Environment.SetEnvironmentVariable("GYMBEAM_ENV_PATH", _credentialsPath);
         ResetLoggerPath();
 
         File.WriteAllText(_configPath, CreateInitialConfigJson());
+        File.WriteAllText(_credentialsPath, "GYMBEAM_ADMIN_USER=testadmin\nGYMBEAM_AUTH_LOGIN=old\nGYMBEAM_AUTH_LOGIN=duplicate\n");
 
         var cfg = new AppConfig
         {
@@ -76,7 +83,9 @@ public class AdminWebServerIntegrationTests : IDisposable
             cfg,
             store,
             () => new BotStatusSnapshot { IsRunning = true, TotalIterations = 42 },
-            _configFileName);
+            _configFileName,
+            () => Interlocked.Increment(ref _credentialUpdates),
+            new SuccessfulCredentialValidator());
 
         _server.Start();
         Thread.Sleep(150);
@@ -92,7 +101,7 @@ public class AdminWebServerIntegrationTests : IDisposable
         var body = await response.Content.ReadAsStringAsync();
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        Assert.Contains("GymBeam Bot Admin", body);
+        Assert.Contains("Керування ботом GymBeam", body);
         Assert.Contains("weekendOrHolidayMinHoursAhead", body);
         Assert.Contains("importantShiftNotificationCount", body);
         Assert.Contains("importantShiftNotificationDelayMilliseconds", body);
@@ -417,6 +426,29 @@ public class AdminWebServerIntegrationTests : IDisposable
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
 
+    [Fact]
+    public async Task UserCredentials_UpdatePersistsSecretsWithoutReturningThem()
+    {
+        await LoginAsync("testadmin", "testpass");
+        const string payload = """
+            {"gymBeamLogin":"new-login","gymBeamPassword":"new-password","telegramBotToken":"123:new-token","telegramChatId":"-100123"}
+            """;
+
+        using HttpResponseMessage response = await _client.PutAsync(
+            "/api/user-credentials", new StringContent(payload, Encoding.UTF8, "application/json"));
+        string responseBody = await response.Content.ReadAsStringAsync();
+        string savedCredentials = await File.ReadAllTextAsync(_credentialsPath);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.DoesNotContain("new-password", responseBody);
+        Assert.DoesNotContain("new-token", responseBody);
+        Assert.Contains("GYMBEAM_AUTH_LOGIN=\"new-login\"", savedCredentials);
+        Assert.Contains("GYMBEAM_AUTH_PASSWORD=\"new-password\"", savedCredentials);
+        Assert.Contains("GYMBEAM_TELEGRAM_BOT_TOKEN=\"123:new-token\"", savedCredentials);
+        Assert.Equal(1, savedCredentials.Split("GYMBEAM_AUTH_LOGIN=", StringSplitOptions.None).Length - 1);
+        Assert.Equal(1, _credentialUpdates);
+    }
+
     public void Dispose()
     {
         _server.Stop();
@@ -426,6 +458,7 @@ public class AdminWebServerIntegrationTests : IDisposable
         {
             File.Delete(_configPath);
         }
+        if (File.Exists(_credentialsPath)) File.Delete(_credentialsPath);
 
         string? logPath = Environment.GetEnvironmentVariable("GYMBEAM_LOG_PATH");
         if (!string.IsNullOrWhiteSpace(logPath) && File.Exists(logPath))
@@ -439,6 +472,7 @@ public class AdminWebServerIntegrationTests : IDisposable
         Environment.SetEnvironmentVariable("GYMBEAM_ADMIN_PASSWORD", string.IsNullOrEmpty(_previousPassword) ? null : _previousPassword);
         Environment.SetEnvironmentVariable("GYMBEAM_ADMIN_TOKEN_SECRET", string.IsNullOrEmpty(_previousSecret) ? null : _previousSecret);
         Environment.SetEnvironmentVariable("GYMBEAM_LOG_PATH", string.IsNullOrEmpty(_previousLogPath) ? null : _previousLogPath);
+        Environment.SetEnvironmentVariable("GYMBEAM_ENV_PATH", string.IsNullOrEmpty(_previousEnvPath) ? null : _previousEnvPath);
         ResetLoggerPath();
     }
 
@@ -498,5 +532,16 @@ public class AdminWebServerIntegrationTests : IDisposable
           }
         }
         """;
+    }
+
+    private sealed class SuccessfulCredentialValidator : IUserCredentialValidator
+    {
+        public UserCredentialValidationResult Validate(AppConfig current, UserCredentialsUpdateRequest credentials) => new()
+        {
+            TelegramValid = true,
+            GymBeamValid = true,
+            TelegramMessage = "Telegram OK",
+            GymBeamMessage = "GymBeam OK"
+        };
     }
 }

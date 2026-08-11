@@ -51,6 +51,14 @@ namespace GymBeamShiftsControllerX.Services
         public int ImportantShiftNotificationDelayMilliseconds { get; set; }
     }
 
+    public class UserCredentialsUpdateRequest
+    {
+        public string GymBeamLogin { get; set; } = string.Empty;
+        public string GymBeamPassword { get; set; } = string.Empty;
+        public string TelegramBotToken { get; set; } = string.Empty;
+        public string TelegramChatId { get; set; } = string.Empty;
+    }
+
     public class AdminWebServer
     {
         private const string SessionCookieName = "gb_admin_session";
@@ -69,6 +77,8 @@ namespace GymBeamShiftsControllerX.Services
         private readonly ShiftRulesStore _shiftRulesStore;
         private readonly Func<BotStatusSnapshot> _statusProvider;
         private readonly string _configFileName;
+        private readonly Action _credentialsUpdated;
+        private readonly IUserCredentialValidator _credentialValidator;
         private readonly object _loginAttemptsLock = new object();
         private readonly Dictionary<string, List<DateTime>> _loginAttemptsByIp = new Dictionary<string, List<DateTime>>();
         private Thread? _serverThread;
@@ -77,12 +87,16 @@ namespace GymBeamShiftsControllerX.Services
             AppConfig config,
             ShiftRulesStore shiftRulesStore,
             Func<BotStatusSnapshot> statusProvider,
-            string configFileName = AppConstants.ConfigFileName)
+            string configFileName = AppConstants.ConfigFileName,
+            Action? credentialsUpdated = null,
+            IUserCredentialValidator? credentialValidator = null)
         {
             _config = config;
             _shiftRulesStore = shiftRulesStore;
             _statusProvider = statusProvider;
             _configFileName = configFileName;
+            _credentialsUpdated = credentialsUpdated ?? (() => { });
+            _credentialValidator = credentialValidator ?? new UserCredentialValidator();
         }
 
         public void Start()
@@ -203,6 +217,24 @@ namespace GymBeamShiftsControllerX.Services
             if (method == "PUT" && path == "/api/shift-rules")
             {
                 HandleShiftRulesUpdate(context);
+                return;
+            }
+
+            if (method == "GET" && path == "/api/user-credentials")
+            {
+                WriteJson(context.Response, 200, new
+                {
+                    gymBeamLoginConfigured = !string.IsNullOrWhiteSpace(_config.Auth.Login),
+                    gymBeamPasswordConfigured = !string.IsNullOrWhiteSpace(_config.Auth.Password),
+                    telegramBotTokenConfigured = !string.IsNullOrWhiteSpace(_config.Telegram.BotToken),
+                    telegramChatIdConfigured = !string.IsNullOrWhiteSpace(_config.Telegram.ChatId)
+                });
+                return;
+            }
+
+            if (method == "PUT" && path == "/api/user-credentials")
+            {
+                HandleUserCredentialsUpdate(context);
                 return;
             }
 
@@ -376,6 +408,83 @@ namespace GymBeamShiftsControllerX.Services
                 DateTime.UtcNow.AddDays(SessionLifetimeDays),
                 maxAgeSeconds: SessionLifetimeDays * 24 * 60 * 60);
         }
+
+        private void HandleUserCredentialsUpdate(HttpListenerContext context)
+        {
+            try
+            {
+                UserCredentialsUpdateRequest? update = JsonSerializer.Deserialize<UserCredentialsUpdateRequest>(
+                    ReadRequestBody(context.Request), RequestJsonOptions);
+                if (update == null)
+                {
+                    WriteJson(context.Response, 400, new { error = "Неправильні дані" });
+                    return;
+                }
+
+                string login = MergeCredential(update.GymBeamLogin, _config.Auth.Login);
+                string password = MergeCredential(update.GymBeamPassword, _config.Auth.Password);
+                string telegramToken = MergeCredential(update.TelegramBotToken, _config.Telegram.BotToken);
+                string chatId = MergeCredential(update.TelegramChatId, _config.Telegram.ChatId);
+                if (!ValidCredential(login) || !ValidCredential(password)
+                    || !ValidCredential(telegramToken) || !ValidCredential(chatId))
+                {
+                    WriteJson(context.Response, 400, new { error = "Заповніть усі чотири поля коректними значеннями" });
+                    return;
+                }
+
+
+                var candidate = new UserCredentialsUpdateRequest
+                {
+                    GymBeamLogin = login,
+                    GymBeamPassword = password,
+                    TelegramBotToken = telegramToken,
+                    TelegramChatId = chatId
+                };
+                UserCredentialValidationResult validation = _credentialValidator.Validate(_config, candidate);
+                if (!validation.Succeeded)
+                {
+                    WriteJson(context.Response, 400, new
+                    {
+                        error = "Перевірка налаштувань не пройдена",
+                        validation.TelegramValid,
+                        validation.GymBeamValid,
+                        validation.TelegramMessage,
+                        validation.GymBeamMessage
+                    });
+                    return;
+                }
+
+                ConfigurationLoader.SaveUserCredentials(_configFileName, login, password, telegramToken, chatId);
+                _config.Auth.Login = login;
+                _config.Auth.Password = password;
+                _config.Telegram.BotToken = telegramToken;
+                _config.Telegram.ChatId = chatId;
+                Logger.Log("User-managed credentials updated from bot admin UI.");
+                WriteJson(context.Response, 200, new
+                {
+                    ok = true,
+                    configured = true,
+                    validation.TelegramValid,
+                    validation.GymBeamValid,
+                    validation.TelegramMessage,
+                    validation.GymBeamMessage
+                });
+                _credentialsUpdated();
+            }
+            catch (Exception ex)
+            {
+                Logger.Log($"User credential update failed: {ex.Message}");
+                WriteJson(context.Response, 500, new { error = "Не вдалося зберегти налаштування" });
+            }
+        }
+
+        private static string MergeCredential(string? update, string current) =>
+            string.IsNullOrWhiteSpace(update) ? current : update.Trim();
+
+        private static bool ValidCredential(string value) =>
+            !string.IsNullOrWhiteSpace(value)
+            && value.Length <= 4096
+            && value.IndexOfAny(new[] { '\r', '\n', '\0' }) < 0;
 
         private static void ExpireSessionCookie(HttpListenerContext context)
         {
@@ -625,11 +734,11 @@ namespace GymBeamShiftsControllerX.Services
         private static string BuildAdminHtml()
         {
             return @"<!doctype html>
-<html lang='en'>
+<html lang='uk'>
 <head>
   <meta charset='utf-8' />
   <meta name='viewport' content='width=device-width,initial-scale=1' />
-  <title>GymBeam Bot Admin</title>
+  <title>Керування ботом GymBeam</title>
   <style>
     body { font-family: Arial, sans-serif; margin: 0; background: #111827; color: #e5e7eb; }
     .container { max-width: 980px; margin: 24px auto; padding: 0 16px; }
@@ -645,77 +754,97 @@ namespace GymBeamShiftsControllerX.Services
     .hidden { display:none; }
     .validation-error { color:#fca5a5; margin-top:10px; white-space:pre-wrap; }
     pre { white-space: pre-wrap; max-height: 320px; overflow:auto; background:#0b1220; padding:10px; border-radius:8px; }
+    .label-row { display:flex; align-items:center; gap:7px; margin:10px 0 4px; }
+    .label-row label { margin:0; }
+    .help { position:relative; display:inline-grid; place-items:center; width:19px; height:19px; flex:0 0 19px; border:1px solid #60a5fa; border-radius:50%; color:#93c5fd; font-size:12px; font-weight:bold; cursor:help; outline:none; }
+    .help::after { content:attr(data-tip); position:absolute; z-index:20; left:50%; bottom:calc(100% + 9px); width:min(320px,75vw); padding:10px 12px; border:1px solid #4b5563; border-radius:8px; background:#030712; color:#e5e7eb; box-shadow:0 10px 30px #0009; font-size:13px; font-weight:normal; line-height:1.4; opacity:0; visibility:hidden; transform:translate(-50%,5px); transition:.15s; pointer-events:none; }
+    .help:hover::after,.help:focus::after { opacity:1; visibility:visible; transform:translate(-50%,0); }
+    .topbar { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:16px; }
+    .topbar h1 { margin:0; }.topbar button { width:auto; margin:0; }
+    dialog { width:min(520px,calc(100% - 24px)); padding:0; border:1px solid #374151; border-radius:12px; background:#1f2937; color:#e5e7eb; box-shadow:0 24px 80px #000b; }
+    dialog::backdrop { background:#030712cc; }.settings-form{padding:20px}.settings-form h2{margin:0 0 6px}.settings-note{color:#9ca3af;font-size:13px}.dialog-actions{display:flex;gap:10px;margin-top:16px}.dialog-actions button{width:auto;flex:1}.secondary{background:#374151}.configured{color:#86efac}.not-configured{color:#fca5a5}
+    @media(max-width:700px){.grid{grid-template-columns:1fr}.container{margin:16px auto}.help::after{left:auto;right:-8px;transform:translateY(5px)}.help:hover::after,.help:focus::after{transform:translateY(0)}}
   </style>
 </head>
 <body>
   <div class='container'>
-    <h1>GymBeam Bot Admin</h1>
+    <div class='topbar'><h1>Керування ботом GymBeam</h1><button id='settingsButton' class='secondary hidden' onclick='openSettings()'>Налаштування</button></div>
 
     <div id='loginCard' class='card'>
-      <h2>Login</h2>
-      <label>Username</label>
+      <h2>Вхід</h2>
+      <div class='label-row'><label>Ім’я користувача</label><span class='help' tabindex='0' data-tip='Логін для доступу до панелі керування цього бота. Це не логін від сайту GymBeam.'>?</span></div>
       <input id='username' />
-      <label>Password</label>
+      <div class='label-row'><label>Пароль</label><span class='help' tabindex='0' data-tip='Пароль адміністратора цього бота. Він використовується лише для входу в цю панель.'>?</span></div>
       <input id='password' type='password' />
-      <button onclick='login()'>Login</button>
+      <button onclick='login()'>Увійти</button>
       <div id='loginError'></div>
     </div>
 
     <div id='app' class='hidden'>
       <div class='card'>
-        <h2>Status</h2>
-        <pre id='status'>Loading...</pre>
+        <h2>Стан бота <span class='help' tabindex='0' data-tip='Поточний технічний стан бота: чи він працює, кількість перевірок, час останньої успішної операції та остання помилка.'>?</span></h2>
+        <pre id='status'>Завантаження...</pre>
       </div>
 
       <div class='card'>
-        <h2>Shift Rules</h2>
-        <label class='checkbox-label'><input id='takeLunch' type='checkbox' /> Take lunch</label>
-        <label>ShiftMinHoursAhead (hours before shift starts)</label>
+        <h2>Правила вибору змін</h2>
+        <label class='checkbox-label'><input id='takeLunch' type='checkbox' /> Брати обід <span class='help' tabindex='0' data-tip='Визначає, чи бот обиратиме варіант зміни з обідньою перервою під час реєстрації.'>?</span></label>
+        <div class='label-row'><label>Мінімум годин до початку зміни</label><span class='help' tabindex='0' data-tip='Бот розглядатиме лише зміни, до початку яких залишилося не менше вказаної кількості годин. Допустиме значення: від 1 до 720.'>?</span></div>
         <input id='shiftMinHoursAhead' type='number' min='1' max='720' step='1' required />
-        <label>WeekendOrHolidayMinHoursAhead</label>
+        <div class='label-row'><label>Мінімум годин для вихідних і свят</label><span class='help' tabindex='0' data-tip='Окремий мінімальний запас часу для змін у суботу, неділю або дати зі списку свят. Допустиме значення: від 1 до 720 годин.'>?</span></div>
         <input id='weekendOrHolidayMinHoursAhead' type='number' min='1' max='720' step='1' required />
-        <label>ImportantShiftNotificationCount</label>
+        <div class='label-row'><label>Кількість сповіщень про важливу зміну</label><span class='help' tabindex='0' data-tip='Скільки однакових Telegram-повідомлень надіслати, коли знайдена важлива зміна у вихідний або святковий день. Від 1 до 20.'>?</span></div>
         <input id='importantShiftNotificationCount' type='number' min='1' max='20' step='1' required />
-        <label>ImportantShiftNotificationDelayMilliseconds</label>
+        <div class='label-row'><label>Затримка між важливими сповіщеннями, мс</label><span class='help' tabindex='0' data-tip='Пауза в мілісекундах між повторними Telegram-сповіщеннями про важливу зміну. 1000 мс дорівнює 1 секунді. Від 0 до 600000.'>?</span></div>
         <input id='importantShiftNotificationDelayMilliseconds' type='number' min='0' max='600000' step='1000' required />
         <div class='grid'>
           <div>
-            <label>IncludedWeekdays (one per line)</label>
+            <div class='label-row'><label>Дозволені дні тижня, по одному в рядку</label><span class='help' tabindex='0' data-tip='Дні тижня, у які бот може брати зміни. Вводьте англійські назви Monday–Sunday, оскільки їх очікує система GymBeam.'>?</span></div>
             <textarea id='includedWeekdays' rows='6'></textarea>
-            <label>StartTimesToSkip (one per line)</label>
+            <div class='label-row'><label>Час початку, який треба пропускати</label><span class='help' tabindex='0' data-tip='Бот не братиме зміни, що починаються у вказаний час. Кожне значення вводьте з нового рядка у форматі HH:mm, наприклад 22:00.'>?</span></div>
             <textarea id='startTimesToSkip' rows='6'></textarea>
-            <label>FavoriteShiftUsers (one per line)</label>
+            <div class='label-row'><label>Пріоритетні працівники, по одному в рядку</label><span class='help' tabindex='0' data-tip='Якщо на одну дату доступно кілька змін, бот спочатку спробує вибрати зміну працівника з цього списку. Вказуйте ім’я так, як воно показане на сайті.'>?</span></div>
             <textarea id='favoriteShiftUsers' rows='6'></textarea>
           </div>
           <div>
-            <label>Holidays yyyy-MM-dd (one per line)</label>
+            <div class='label-row'><label>Святкові дати у форматі РРРР-ММ-ДД</label><span class='help' tabindex='0' data-tip='Ці дати бот вважатиме святковими та застосує до них окремий мінімальний запас годин і посилені Telegram-сповіщення.'>?</span></div>
             <textarea id='holidays' rows='6'></textarea>
-            <label>ExcludedDates yyyy-MM-dd (one per line)</label>
+            <div class='label-row'><label>Виключені дати у форматі РРРР-ММ-ДД</label><span class='help' tabindex='0' data-tip='У ці дати бот повністю ігноруватиме всі доступні зміни та не намагатиметься на них зареєструватися.'>?</span></div>
             <textarea id='excludedDates' rows='6'></textarea>
           </div>
         </div>
-        <button onclick='saveRules()'>Save ShiftRules</button>
+        <button onclick='saveRules()'>Зберегти правила</button>
         <div id='rulesError' class='validation-error' role='alert'></div>
       </div>
 
       <div class='card'>
-        <h2>Today Logs</h2>
-        <button onclick='loadLogs()'>Refresh Logs</button>
-        <pre id='logs'></pre>
-      </div>
-
-      <div class='card'>
-        <button onclick='logout()'>Logout</button>
+        <button onclick='logout()'>Вийти</button>
       </div>
     </div>
   </div>
+  <dialog id='settingsDialog'>
+    <form class='settings-form' onsubmit='saveUserCredentials(event)'>
+      <h2>Налаштування підключень <span class='help' tabindex='0' data-tip='Як налаштувати Telegram: 1) відкрийте офіційний чат @BotFather; 2) надішліть /newbot і виконайте його інструкції; 3) скопіюйте створений токен; 4) знайдіть свого нового бота в Telegram і надішліть йому /start; 5) отримайте Chat ID через @userinfobot або методом getUpdates Telegram API; 6) вставте токен і Chat ID у поля нижче та натисніть «Зберегти». Система автоматично надішле тестове повідомлення.'>?</span></h2>
+      <p class='settings-note'>Порожнє поле залишає поточне значення без змін. Збережені паролі й токени ніколи не показуються.</p>
+      <div id='credentialsState' class='settings-note'></div>
+      <div class='label-row'><label>Логін GymBeam</label><span class='help' tabindex='0' data-tip='Логін вашого облікового запису на сайті part-time GymBeam.'>?</span></div><input id='gymBeamLogin' autocomplete='username'>
+      <div class='label-row'><label>Пароль GymBeam</label><span class='help' tabindex='0' data-tip='Пароль вашого облікового запису GymBeam. Він потрібен боту для автоматичного входу.'>?</span></div><input id='gymBeamPassword' type='password' autocomplete='new-password'>
+      <div class='label-row'><label>Токен Telegram-бота</label><span class='help' tabindex='0' data-tip='Відкрийте офіційного @BotFather у Telegram, надішліть команду /newbot, задайте ім’я та username нового бота. BotFather надішле довгий токен на зразок 123456789:ABC... Скопіюйте його сюди. Потім обов’язково знайдіть створеного бота і надішліть йому /start.'>?</span></div><input id='telegramBotToken' type='password' autocomplete='new-password'>
+      <div class='label-row'><label>Telegram Chat ID</label><span class='help' tabindex='0' data-tip='Це числовий ідентифікатор чату, куди надходитимуть повідомлення. Спочатку напишіть своєму створеному боту /start. Потім перешліть будь-яке повідомлення боту @userinfobot — він покаже ваш Id. Для групи додайте створеного бота в групу, напишіть повідомлення та знайдіть поле message.chat.id через метод getUpdates Telegram API; ID групи зазвичай починається з мінуса.'>?</span></div><input id='telegramChatId' autocomplete='off'>
+      <div id='credentialsError' class='validation-error' role='alert'></div>
+      <div id='credentialsValidation' class='settings-note' role='status' aria-live='polite'></div>
+      <div class='dialog-actions'><button type='button' class='secondary' onclick='closeSettings()'>Скасувати</button><button type='submit'>Зберегти</button></div>
+    </form>
+  </dialog>
 
   <script>
     async function api(path, options) {
       const response = await fetch(path, { credentials: 'include', headers: { 'Content-Type': 'application/json' }, ...options });
       if (!response.ok) {
         const payload = await response.json().catch(() => ({}));
-        throw new Error(payload.error || 'Request failed');
+        const error = new Error(payload.error || 'Не вдалося виконати запит');
+        error.payload = payload;
+        throw error;
       }
       return response.json().catch(() => ({}));
     }
@@ -731,12 +860,12 @@ namespace GymBeamShiftsControllerX.Services
     function readInteger(id, label, min, max) {
       const raw = document.getElementById(id).value.trim();
       if (!/^\d+$/.test(raw)) {
-        throw new Error(`${label} must be a whole number.`);
+        throw new Error(`${label}: введіть ціле число.`);
       }
 
       const value = Number(raw);
       if (!Number.isSafeInteger(value) || value < min || value > max) {
-        throw new Error(`${label} must be between ${min} and ${max}.`);
+        throw new Error(`${label}: значення має бути від ${min} до ${max}.`);
       }
 
       return value;
@@ -745,7 +874,7 @@ namespace GymBeamShiftsControllerX.Services
     function validateList(values, label, predicate, expectedFormat) {
       for (const value of values) {
         if (!predicate(value)) {
-          throw new Error(`${label}: invalid value '${value}'. Expected ${expectedFormat}.`);
+          throw new Error(`${label}: неправильне значення '${value}'. Очікується ${expectedFormat}.`);
         }
       }
       return values;
@@ -773,36 +902,36 @@ namespace GymBeamShiftsControllerX.Services
       ]);
       const includedWeekdays = validateList(
         linesToArray(document.getElementById('includedWeekdays').value),
-        'IncludedWeekdays',
+        'Дозволені дні тижня',
         value => allowedWeekdays.has(value.toLowerCase()),
-        'a weekday name from Monday to Sunday');
+        'назва дня від Monday до Sunday');
       const startTimesToSkip = validateList(
         linesToArray(document.getElementById('startTimesToSkip').value),
-        'StartTimesToSkip',
+        'Час початку, який треба пропускати',
         isValidTime,
-        'HH:mm (00:00-23:59)');
+        'час у форматі HH:mm (00:00–23:59)');
       const favoriteShiftUsers = validateList(
         linesToArray(document.getElementById('favoriteShiftUsers').value),
-        'FavoriteShiftUsers',
+        'Пріоритетні працівники',
         value => value.length <= 100,
-        'a name up to 100 characters');
+        'ім’я довжиною до 100 символів');
       const holidays = validateList(
         linesToArray(document.getElementById('holidays').value),
-        'Holidays',
+        'Святкові дати',
         isValidDate,
-        'a real date in yyyy-MM-dd format');
+        'реальна дата у форматі РРРР-ММ-ДД');
       const excludedDates = validateList(
         linesToArray(document.getElementById('excludedDates').value),
-        'ExcludedDates',
+        'Виключені дати',
         isValidDate,
-        'a real date in yyyy-MM-dd format');
+        'реальна дата у форматі РРРР-ММ-ДД');
 
       return {
         takeLunch: document.getElementById('takeLunch').checked,
-        shiftMinHoursAhead: readInteger('shiftMinHoursAhead', 'ShiftMinHoursAhead', 1, 720),
-        weekendOrHolidayMinHoursAhead: readInteger('weekendOrHolidayMinHoursAhead', 'WeekendOrHolidayMinHoursAhead', 1, 720),
-        importantShiftNotificationCount: readInteger('importantShiftNotificationCount', 'ImportantShiftNotificationCount', 1, 20),
-        importantShiftNotificationDelayMilliseconds: readInteger('importantShiftNotificationDelayMilliseconds', 'ImportantShiftNotificationDelayMilliseconds', 0, 600000),
+        shiftMinHoursAhead: readInteger('shiftMinHoursAhead', 'Мінімум годин до початку зміни', 1, 720),
+        weekendOrHolidayMinHoursAhead: readInteger('weekendOrHolidayMinHoursAhead', 'Мінімум годин для вихідних і свят', 1, 720),
+        importantShiftNotificationCount: readInteger('importantShiftNotificationCount', 'Кількість сповіщень про важливу зміну', 1, 20),
+        importantShiftNotificationDelayMilliseconds: readInteger('importantShiftNotificationDelayMilliseconds', 'Затримка між важливими сповіщеннями', 0, 600000),
         includedWeekdays,
         startTimesToSkip,
         favoriteShiftUsers,
@@ -818,7 +947,11 @@ namespace GymBeamShiftsControllerX.Services
         await api('/api/login', { method: 'POST', body: JSON.stringify({ username, password }) });
         document.getElementById('loginCard').classList.add('hidden');
         document.getElementById('app').classList.remove('hidden');
+        document.getElementById('settingsButton').classList.remove('hidden');
         await refreshAll();
+        const credentials = await api('/api/user-credentials');
+        if (!(credentials.gymBeamLoginConfigured && credentials.gymBeamPasswordConfigured
+          && credentials.telegramBotTokenConfigured && credentials.telegramChatIdConfigured)) await openSettings();
       } catch (e) {
         document.getElementById('loginError').innerText = e.message;
       }
@@ -855,19 +988,51 @@ namespace GymBeamShiftsControllerX.Services
         const payload = buildRulesPayload();
         await api('/api/shift-rules', { method: 'PUT', body: JSON.stringify(payload) });
         await loadRules();
-        alert('Saved');
+        alert('Правила збережено');
       } catch (e) {
         errorElement.innerText = e.message;
       }
     }
 
-    async function loadLogs() {
-      const result = await api('/api/logs/today?limit=300');
-      document.getElementById('logs').innerText = (result.lines || []).join('\n');
+    async function openSettings() {
+      document.getElementById('credentialsError').innerText = '';
+      document.getElementById('credentialsValidation').innerText = '';
+      const state = await api('/api/user-credentials');
+      const complete = state.gymBeamLoginConfigured && state.gymBeamPasswordConfigured
+        && state.telegramBotTokenConfigured && state.telegramChatIdConfigured;
+      const stateElement = document.getElementById('credentialsState');
+      stateElement.className = complete ? 'settings-note configured' : 'settings-note not-configured';
+      stateElement.innerText = complete ? 'Усі підключення налаштовані.' : 'Потрібно заповнити всі чотири параметри.';
+      document.getElementById('settingsDialog').showModal();
+    }
+
+    function closeSettings() { document.getElementById('settingsDialog').close(); }
+
+    async function saveUserCredentials(event) {
+      event.preventDefault();
+      const error = document.getElementById('credentialsError');
+      error.innerText = '';
+      try {
+        const result = await api('/api/user-credentials', { method: 'PUT', body: JSON.stringify({
+          gymBeamLogin: document.getElementById('gymBeamLogin').value,
+          gymBeamPassword: document.getElementById('gymBeamPassword').value,
+          telegramBotToken: document.getElementById('telegramBotToken').value,
+          telegramChatId: document.getElementById('telegramChatId').value
+        }) });
+        document.querySelector('#settingsDialog form').reset();
+        document.getElementById('credentialsValidation').innerText =
+          '✅ Telegram: '+result.telegramMessage+'\n✅ GymBeam: '+result.gymBeamMessage+'\n\nНалаштування збережено. Бот починає роботу.';
+      } catch (e) {
+        error.innerText = e.message;
+        const details = e.payload;
+        if(details) document.getElementById('credentialsValidation').innerText =
+          (details.telegramValid?'✅':'❌')+' Telegram: '+(details.telegramMessage||'Не перевірено')+'\n'+
+          (details.gymBeamValid?'✅':'❌')+' GymBeam: '+(details.gymBeamMessage||'Не перевірено');
+      }
     }
 
     async function refreshAll() {
-      await Promise.all([loadStatus(), loadRules(), loadLogs()]);
+      await Promise.all([loadStatus(), loadRules()]);
       setInterval(loadStatus, 10000);
     }
 
@@ -876,10 +1041,15 @@ namespace GymBeamShiftsControllerX.Services
         await api('/api/status');
         document.getElementById('loginCard').classList.add('hidden');
         document.getElementById('app').classList.remove('hidden');
+        document.getElementById('settingsButton').classList.remove('hidden');
         await refreshAll();
+        const credentials = await api('/api/user-credentials');
+        if (!(credentials.gymBeamLoginConfigured && credentials.gymBeamPasswordConfigured
+          && credentials.telegramBotTokenConfigured && credentials.telegramChatIdConfigured)) await openSettings();
       } catch {
         document.getElementById('loginCard').classList.remove('hidden');
         document.getElementById('app').classList.add('hidden');
+        document.getElementById('settingsButton').classList.add('hidden');
       }
     }
 

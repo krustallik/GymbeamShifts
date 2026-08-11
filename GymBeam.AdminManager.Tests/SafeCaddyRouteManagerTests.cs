@@ -14,10 +14,17 @@ public sealed class SafeCaddyRouteManagerTests : IDisposable
         Directory.CreateDirectory(_root);
         string caddyfile = Path.Combine(_root, "Caddyfile");
         await File.WriteAllTextAsync(caddyfile, "import /etc/caddy/dynamic/*.caddy");
-        var handler = new RecordingHttpMessageHandler((request, _, _) => Task.FromResult(
-            request.RequestUri!.AbsolutePath == "/adapt"
-                ? JsonResponse("{\"apps\":{}}")
-                : new HttpResponseMessage(HttpStatusCode.OK)));
+        string? loadedConfiguration = null;
+        var handler = new RecordingHttpMessageHandler(async (request, _, _) =>
+        {
+            if (request.RequestUri!.AbsolutePath == "/adapt")
+            {
+                return JsonResponse("{\"result\":{\"apps\":{}},\"warnings\":[\"test warning\"]}");
+            }
+
+            loadedConfiguration = await request.Content!.ReadAsStringAsync();
+            return new HttpResponseMessage(HttpStatusCode.OK);
+        });
         var manager = Create(caddyfile, handler);
 
         ResourceResult result = await manager.AddAsync(Spec());
@@ -26,6 +33,7 @@ public sealed class SafeCaddyRouteManagerTests : IDisposable
         string route = await File.ReadAllTextAsync(Path.Combine(_root, "bot3.caddy"));
         Assert.Contains("bot3.example.test", route, StringComparison.Ordinal);
         Assert.Contains("reverse_proxy gymbeam-shifts-bot3:8080", route, StringComparison.Ordinal);
+        Assert.Equal("{\"apps\":{}}", loadedConfiguration);
         Assert.Collection(handler.Requests,
             request => Assert.Equal((HttpMethod.Post, "/adapt"), request),
             request => Assert.Equal((HttpMethod.Post, "/load"), request));
@@ -40,7 +48,7 @@ public sealed class SafeCaddyRouteManagerTests : IDisposable
         int loadCount = 0;
         var handler = new RecordingHttpMessageHandler((request, _, _) => Task.FromResult(
             request.RequestUri!.AbsolutePath == "/adapt"
-                ? JsonResponse("{\"apps\":{}}")
+                ? JsonResponse("{\"result\":{\"apps\":{}}}")
                 : Interlocked.Increment(ref loadCount) == 1
                     ? new HttpResponseMessage(HttpStatusCode.BadRequest)
                     : new HttpResponseMessage(HttpStatusCode.OK)));
@@ -52,6 +60,30 @@ public sealed class SafeCaddyRouteManagerTests : IDisposable
         Assert.Equal("caddy_reload_failed", result.Outcome);
         Assert.False(File.Exists(Path.Combine(_root, "bot3.caddy")));
         Assert.Equal(2, loadCount);
+    }
+
+    [Theory]
+    [InlineData("{\"apps\":{}}")]
+    [InlineData("{\"result\":null}")]
+    [InlineData("not-json")]
+    public async Task AddAsync_InvalidAdaptResponseDoesNotCallLoad(string responseBody)
+    {
+        Directory.CreateDirectory(_root);
+        string caddyfile = Path.Combine(_root, "Caddyfile");
+        await File.WriteAllTextAsync(caddyfile, "import /etc/caddy/dynamic/*.caddy");
+        var handler = new RecordingHttpMessageHandler((request, _, _) => Task.FromResult(
+            request.RequestUri!.AbsolutePath == "/adapt"
+                ? JsonResponse(responseBody)
+                : throw new InvalidOperationException("Load must not be called")));
+        var manager = Create(caddyfile, handler);
+
+        ResourceResult result = await manager.AddAsync(Spec());
+
+        Assert.False(result.Succeeded);
+        Assert.Equal("caddy_invalid_response", result.Outcome);
+        Assert.False(File.Exists(Path.Combine(_root, "bot3.caddy")));
+        Assert.Equal(2, handler.Requests.Count);
+        Assert.All(handler.Requests, request => Assert.Equal("/adapt", request.PathAndQuery));
     }
 
     [Fact]

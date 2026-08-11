@@ -13,6 +13,7 @@ using GymBeam.AdminManager.Lifecycle;
 using GymBeam.AdminManager.Logs;
 using GymBeam.AdminManager.Credentials;
 using GymBeam.AdminManager.Provisioning;
+using GymBeam.AdminManager.Messaging;
 
 namespace GymBeam.AdminManager;
 
@@ -24,7 +25,8 @@ public static class AdminManagerApplication
         TimeProvider? timeProvider = null,
         IDockerStatusReader? dockerStatusReader = null,
         IDockerLifecycleController? dockerLifecycleController = null,
-        IDockerLogReader? dockerLogReader = null)
+        IDockerLogReader? dockerLogReader = null,
+        ITelegramMessageSender? telegramMessageSender = null)
     {
         ArgumentNullException.ThrowIfNull(options);
 
@@ -116,6 +118,13 @@ public static class AdminManagerApplication
         builder.Services.AddSingleton<CredentialUpdateService>();
         builder.Services.AddSingleton<CredentialRecoveryService>();
         builder.Services.AddHostedService<CredentialRecoveryHostedService>();
+        builder.Services.AddSingleton<ITelegramMessageSender>(telegramMessageSender
+            ?? new TelegramApiMessageSender(new HttpClient { Timeout = TimeSpan.FromSeconds(15) }));
+        builder.Services.AddSingleton(serviceProvider => new TelegramMessagingService(
+            serviceProvider.GetRequiredService<IManagedBotRegistry>(),
+            serviceProvider.GetRequiredService<ITelegramMessageSender>(),
+            serviceProvider.GetRequiredService<AuditLogger>(),
+            options.InstancesPath));
 
         var instanceProvisioner = new SafeInstanceProvisioner(
             options.InstancesPath,
@@ -189,6 +198,7 @@ public static class AdminManagerApplication
         application.MapBotLogEndpoints();
         application.MapCredentialEndpoints();
         application.MapProvisioningEndpoints();
+        application.MapTelegramMessagingEndpoints();
         return application;
     }
 

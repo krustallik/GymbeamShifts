@@ -274,22 +274,23 @@ internal static class AuthenticationEndpoints
           <meta name="viewport" content="width=device-width, initial-scale=1">
           <title>GymBeam Admin Manager - Login</title>
           <style>
-            body{font-family:system-ui,sans-serif;margin:0;min-height:100vh;display:grid;place-items:center;background:#f6f7f9;color:#172033}
-            main{width:min(22rem,calc(100% - 2rem));padding:2rem;background:white;border-radius:.75rem;box-shadow:0 .5rem 2rem #1720331a}
-            h1{margin-top:0;font-size:1.5rem}label{display:block;margin-top:1rem}input{box-sizing:border-box;width:100%;margin-top:.35rem;padding:.7rem;border:1px solid #cbd5e1;border-radius:.4rem}
-            button{width:100%;margin-top:1.25rem;padding:.75rem;border:0;border-radius:.4rem;background:#172033;color:white;font-weight:600;cursor:pointer}button:disabled{opacity:.6;cursor:wait}
-            #error{min-height:1.25rem;margin-top:1rem;color:#b42318}
+            :root{color-scheme:dark;--page:#111827;--surface:#1f2937;--input:#0b1220;--border:#374151;--text:#e5e7eb;--muted:#9ca3af;--blue:#2563eb}
+            *{box-sizing:border-box}body{font-family:Arial,system-ui,sans-serif;margin:0;min-height:100vh;display:grid;place-items:center;background:radial-gradient(circle at top,#1e3a5f 0,var(--page) 42%);color:var(--text);padding:20px}
+            main{width:min(25rem,100%);padding:30px;background:var(--surface);border:1px solid var(--border);border-radius:14px;box-shadow:0 24px 70px #0008}.brand{display:flex;align-items:center;gap:12px;margin-bottom:24px}.brand-mark{display:grid;place-items:center;width:44px;height:44px;border-radius:11px;background:var(--blue);font-size:1.35rem;font-weight:800}h1{margin:0;font-size:1.45rem}.subtitle{margin:.35rem 0 0;color:var(--muted);font-size:.9rem}
+            label{display:grid;gap:7px;margin-top:15px;color:#d1d5db;font-size:.88rem;font-weight:600}input{width:100%;padding:11px 12px;border:1px solid var(--border);border-radius:8px;background:var(--input);color:var(--text);font:inherit;outline:none}input:focus{border-color:#60a5fa;box-shadow:0 0 0 3px #2563eb33}
+            button{width:100%;margin-top:20px;padding:11px;border:0;border-radius:8px;background:var(--blue);color:white;font:inherit;font-weight:700;cursor:pointer}button:hover{background:#1d4ed8}button:disabled{opacity:.6;cursor:wait}#error{min-height:1.25rem;margin-top:14px;color:#fca5a5;font-size:.88rem}.security-note{margin:18px 0 0;padding-top:16px;border-top:1px solid var(--border);color:var(--muted);font-size:.78rem;text-align:center}
           </style>
         </head>
         <body>
           <main>
-            <h1>GymBeam Admin Manager</h1>
+            <div class="brand"><div class="brand-mark">GB</div><div><h1>Admin Manager</h1><p class="subtitle">Sign in to manage GymBeam bots</p></div></div>
             <form id="login-form">
               <label>Username<input name="username" autocomplete="username" required autofocus></label>
               <label>Password<input type="password" name="password" autocomplete="current-password" required></label>
               <button type="submit">Login</button>
               <div id="error" role="alert" aria-live="polite"></div>
             </form>
+            <p class="security-note">Protected administrative access</p>
           </main>
           <script>
             document.getElementById('login-form').addEventListener('submit',async event=>{

@@ -9,6 +9,34 @@ namespace GymBeamShiftsControllerX.Tests;
 public sealed class AdminWebUiValidationTests
 {
     [Fact]
+    public void BotAdminUi_IsUkrainianHasHelpForEverySettingAndOmitsTodayLogs()
+    {
+        string html = (string)ReflectionTestHelper
+            .GetStaticMethod(typeof(AdminWebServer), "BuildAdminHtml")
+            .Invoke(null, null)!;
+
+        Assert.Contains("lang='uk'", html);
+        Assert.Contains("Правила вибору змін", html);
+        Assert.Contains("Мінімум годин до початку зміни", html);
+        Assert.Contains("Пріоритетні працівники", html);
+        Assert.True(Count(html, "class='help'") >= 12);
+        Assert.DoesNotContain("Today Logs", html);
+        Assert.DoesNotContain("Refresh Logs", html);
+        Assert.DoesNotContain("id='logs'", html);
+        Assert.DoesNotContain("loadLogs()", html);
+        Assert.Contains("id='settingsButton'", html);
+        Assert.Contains("id='settingsDialog'", html);
+        Assert.Contains("/api/user-credentials", html);
+        Assert.Contains("id='gymBeamLogin'", html);
+        Assert.Contains("id='telegramBotToken'", html);
+        Assert.Contains("@BotFather", html);
+        Assert.Contains("/newbot", html);
+        Assert.Contains("/start", html);
+        Assert.Contains("@userinfobot", html);
+        Assert.Contains("getUpdates", html);
+    }
+
+    [Fact]
     public void ShiftRulesForm_ValidatesAllEditableValueTypes()
     {
         string directory = Path.Combine(
@@ -54,31 +82,31 @@ public sealed class AdminWebUiValidationTests
             AssertValidationFails(
                 js,
                 "document.getElementById('includedWeekdays').value = 'Funday'; return buildRulesPayload();",
-                "IncludedWeekdays");
+                "Дозволені дні тижня");
             js.ExecuteScript("document.getElementById('includedWeekdays').value = 'Monday';");
 
             AssertValidationFails(
                 js,
                 "document.getElementById('startTimesToSkip').value = '25:00'; return buildRulesPayload();",
-                "StartTimesToSkip");
+                "Час початку, який треба пропускати");
             js.ExecuteScript("document.getElementById('startTimesToSkip').value = '22:00';");
 
             AssertValidationFails(
                 js,
                 "document.getElementById('holidays').value = '2026-02-30'; return buildRulesPayload();",
-                "Holidays");
+                "Святкові дати");
             js.ExecuteScript("document.getElementById('holidays').value = '2026-02-28';");
 
             AssertValidationFails(
                 js,
                 "document.getElementById('shiftMinHoursAhead').value = '1.5'; return buildRulesPayload();",
-                "ShiftMinHoursAhead");
+                "Мінімум годин до початку зміни");
             js.ExecuteScript("document.getElementById('shiftMinHoursAhead').value = '48';");
 
             js.ExecuteScript(
                 "document.getElementById('favoriteShiftUsers').value = arguments[0];",
                 new string('x', 101));
-            AssertValidationFails(js, "return buildRulesPayload();", "FavoriteShiftUsers");
+            AssertValidationFails(js, "return buildRulesPayload();", "Пріоритетні працівники");
         }
         finally
         {
@@ -95,5 +123,15 @@ public sealed class AdminWebUiValidationTests
     {
         var exception = Assert.ThrowsAny<WebDriverException>(() => js.ExecuteScript(script));
         Assert.Contains(expectedMessage, exception.Message);
+    }
+
+    private static int Count(string value, string text)
+    {
+        int count = 0;
+        for (int index = 0; (index = value.IndexOf(text, index, StringComparison.Ordinal)) >= 0; index += text.Length)
+        {
+            count++;
+        }
+        return count;
     }
 }
