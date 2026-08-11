@@ -8,6 +8,7 @@ public static class DashboardHtmlRenderer
 {
     private const long PerBotStorageWarningBytes = 150L * 1024 * 1024;
     private const long TotalStorageWarningBytes = 500L * 1024 * 1024;
+    private const long PerBotMemoryWarningBytes = 450L * 1024 * 1024;
     private static readonly TimeZoneInfo UserTimeZone = ResolveUserTimeZone();
 
     public static string Render(IReadOnlyList<BotDashboardItem> bots)
@@ -28,7 +29,8 @@ public static class DashboardHtmlRenderer
                 details{border:1px solid var(--border);border-radius:10px;background:var(--surface-2)}summary{cursor:pointer;padding:13px 15px;font-weight:700;color:#bfdbfe}details[open]>summary{border-bottom:1px solid var(--border)}form{padding:16px}.form-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}label{display:grid;gap:6px;color:#d1d5db;font-size:.86rem;font-weight:600}input{width:100%;border:1px solid var(--border);border-radius:8px;background:#111827;color:var(--text);padding:10px 11px;outline:none}input:focus{border-color:#60a5fa;box-shadow:0 0 0 3px #2563eb33}
                 button{border:1px solid transparent;border-radius:8px;padding:9px 12px;background:var(--blue);color:white;font-weight:700;cursor:pointer;transition:.15s ease}button:hover{background:var(--blue-hover);transform:translateY(-1px)}button:disabled{opacity:.55;cursor:wait;transform:none}.button-secondary{background:#374151}.button-secondary:hover{background:#4b5563}.button-danger{background:#7f1d1d;color:#fecaca}.button-danger:hover{background:#991b1b}.submit-row{display:flex;align-items:center;gap:12px;margin-top:16px}.submit-row button{min-width:150px}.result{color:var(--muted);font-size:.86rem}
                 dialog{width:min(520px,calc(100% - 24px));padding:0;border:1px solid var(--border);border-radius:14px;background:var(--surface);color:var(--text);box-shadow:0 24px 80px #000b}dialog::backdrop{background:#020617cc}.message-form{padding:22px}.message-form h2{margin:0}.message-target{margin:6px 0 18px;color:var(--muted)}textarea{width:100%;min-height:150px;resize:vertical;border:1px solid var(--border);border-radius:8px;background:var(--surface-2);color:var(--text);padding:11px;font:inherit;outline:none}textarea:focus{border-color:#60a5fa;box-shadow:0 0 0 3px #2563eb33}.dialog-actions{display:flex;justify-content:flex-end;gap:9px;margin-top:14px}.dialog-actions button{min-width:110px}
-                .storage-summary{display:inline-flex;align-items:center;padding:.35rem .65rem;border-radius:999px;background:#064e3b55;color:var(--green);font-size:.8rem;font-weight:700}.storage-summary.warning,.storage-value.warning{background:#7f1d1d66;color:#fecaca}.table-wrap{overflow-x:auto;border:1px solid var(--border);border-radius:10px}table{width:100%;border-collapse:collapse;background:var(--surface-2);min-width:980px}th,td{padding:13px 12px;text-align:left;border-bottom:1px solid #263244;vertical-align:middle}th{background:#172033;color:var(--muted);font-size:.72rem;letter-spacing:.06em;text-transform:uppercase}tbody tr:last-child td{border-bottom:0}tbody tr:hover{background:#162033}.bot-name{font-weight:700}.bot-id{font-family:ui-monospace,monospace;color:var(--muted);font-size:.85rem}.status{display:inline-flex;align-items:center;gap:6px;padding:5px 9px;border-radius:999px;background:#374151;color:#d1d5db;font-size:.78rem;font-weight:700}.status::before{content:'';width:7px;height:7px;border-radius:50%;background:currentColor}.healthy{color:var(--green);background:#064e3b55}.unknown{color:var(--amber);background:#78350f55}.actions{display:flex;flex-wrap:wrap;gap:7px;min-width:310px}.actions button{padding:7px 9px;font-size:.78rem}.operation-result{width:100%;min-height:1rem;color:var(--muted);font-size:.8rem}.bot-logs{width:100%;max-height:280px;overflow:auto;padding:12px;border:1px solid var(--border);border-radius:8px;background:#050a12;color:#cbd5e1;white-space:pre-wrap}.credential-form p{margin-top:0;color:var(--muted);font-size:.85rem}.credential-form{min-width:min(650px,80vw)}
+                .loading-overlay{position:fixed;inset:0;z-index:20000;display:flex;align-items:center;justify-content:center;padding:20px;background:#020617dc;backdrop-filter:blur(4px)}.loading-overlay[hidden]{display:none}.loading-card{width:min(390px,100%);padding:28px 24px;border:1px solid #3b82f6;border-radius:16px;background:#111827;box-shadow:0 24px 80px #000c;text-align:center}.loading-spinner{width:48px;height:48px;margin:0 auto 18px;border:5px solid #334155;border-top-color:#3b82f6;border-radius:50%;animation:spin .8s linear infinite}.loading-card strong{display:block;font-size:1.05rem}.loading-card p{margin:8px 0 0;color:var(--muted);font-size:.9rem}@keyframes spin{to{transform:rotate(360deg)}}
+                .storage-summary{display:inline-flex;align-items:center;padding:.35rem .65rem;border-radius:999px;background:#064e3b55;color:var(--green);font-size:.8rem;font-weight:700}.storage-summary.warning,.metric-value.warning{background:#7f1d1d66;color:#fecaca}.table-wrap{overflow-x:auto;border:1px solid var(--border);border-radius:10px}table{width:100%;border-collapse:collapse;background:var(--surface-2);min-width:1060px}th,td{padding:13px 12px;text-align:left;border-bottom:1px solid #263244;vertical-align:middle}th{background:#172033;color:var(--muted);font-size:.72rem;letter-spacing:.06em;text-transform:uppercase}tbody tr:last-child td{border-bottom:0}tbody tr:hover{background:#162033}.bot-name{font-weight:700}.bot-id{font-family:ui-monospace,monospace;color:var(--muted);font-size:.85rem}.status{display:inline-flex;align-items:center;gap:6px;padding:5px 9px;border-radius:999px;background:#374151;color:#d1d5db;font-size:.78rem;font-weight:700}.status::before{content:'';width:7px;height:7px;border-radius:50%;background:currentColor}.healthy{color:var(--green);background:#064e3b55}.unknown{color:var(--amber);background:#78350f55}.actions{display:flex;flex-wrap:wrap;gap:7px;min-width:310px}.actions button{padding:7px 9px;font-size:.78rem}.operation-result{width:100%;min-height:1rem;color:var(--muted);font-size:.8rem}.bot-logs{width:100%;max-height:280px;overflow:auto;padding:12px;border:1px solid var(--border);border-radius:8px;background:#050a12;color:#cbd5e1;white-space:pre-wrap}.credential-form p{margin-top:0;color:var(--muted);font-size:.85rem}.credential-form{min-width:min(650px,80vw)}
                 .empty{padding:28px;text-align:center;color:var(--muted)}@media(max-width:900px){.form-grid{grid-template-columns:1fr 1fr}}@media(max-width:620px){.container{padding:18px 12px 36px}.topbar{align-items:flex-start}.form-grid{grid-template-columns:1fr}.panel{padding:12px}.subtitle{font-size:.9rem}}
               </style>
             </head>
@@ -50,17 +52,21 @@ public static class DashboardHtmlRenderer
                   </form>
                 </details>
                 <div class="table-wrap"><table>
-                  <thead><tr><th>Bot</th><th>ID</th><th>State</th><th>Health</th><th>Uptime</th><th>Storage</th><th>Last update</th><th>Actions</th></tr></thead>
+                  <thead><tr><th>Bot</th><th>ID</th><th>State</th><th>Health</th><th>Uptime</th><th>Storage</th><th>RAM</th><th>Last update</th><th>Actions</th></tr></thead>
                   <tbody>
             """);
 
         long totalStorageBytes = bots.Sum(bot => Math.Max(0, bot.StorageBytes));
+        long? totalMemoryBytes = bots.Any(bot => bot.MemoryBytes.HasValue)
+            ? bots.Sum(bot => Math.Max(0, bot.MemoryBytes ?? 0))
+            : null;
         string summaryClass = totalStorageBytes >= TotalStorageWarningBytes
+            || bots.Any(bot => bot.MemoryBytes >= PerBotMemoryWarningBytes)
             ? "storage-summary warning"
             : "storage-summary";
         html.Replace(
             "<span class=\"storage-placeholder\"></span>",
-            $"<span class=\"{summaryClass}\">Storage: {Encode(FormatBytes(totalStorageBytes))}</span>");
+            $"<span class=\"{summaryClass}\">Storage: {Encode(FormatBytes(totalStorageBytes))} · RAM: {Encode(FormatNullableBytes(totalMemoryBytes))}</span>");
 
         foreach (BotDashboardItem bot in bots)
         {
@@ -69,9 +75,12 @@ public static class DashboardHtmlRenderer
                 .Append("</td><td><span class=\"status ").Append(CssClass(bot.State)).Append("\">").Append(Encode(bot.State)).Append("</span>")
                 .Append("</td><td><span class=\"status ").Append(CssClass(bot.Health)).Append("\">").Append(Encode(bot.Health)).Append("</span>")
                 .Append("</td><td>").Append(Encode(FormatUptime(bot.Uptime)))
-                .Append("</td><td><span class=\"storage-value")
+                .Append("</td><td><span class=\"metric-value")
                 .Append(bot.StorageBytes >= PerBotStorageWarningBytes ? " warning" : string.Empty)
                 .Append("\">").Append(Encode(FormatBytes(bot.StorageBytes))).Append("</span>")
+                .Append("</td><td><span class=\"metric-value")
+                .Append(bot.MemoryBytes >= PerBotMemoryWarningBytes ? " warning" : string.Empty)
+                .Append("\">").Append(Encode(FormatNullableBytes(bot.MemoryBytes))).Append("</span>")
                 .Append("</td><td>").Append(Encode(FormatTimestamp(bot.LastUpdatedAtUtc)))
                 .Append("</td><td data-bot=\"").Append(Encode(bot.Id)).Append("\"><div class=\"actions\">")
                 .Append("<button type=\"button\" data-action=\"start\">Start</button> ")
@@ -100,12 +109,21 @@ public static class DashboardHtmlRenderer
             """
             </tbody></table></div></section></main>
             <dialog id="message-dialog"><form class="message-form" id="message-form"><h2>Send Telegram message</h2><p class="message-target" id="message-target"></p><label>Message<textarea id="message-text" maxlength="4096" required placeholder="Enter the message to send..."></textarea></label><div class="dialog-actions"><button type="button" class="button-secondary" id="message-cancel">Cancel</button><button type="submit">Send</button></div><div class="result" id="message-result" role="status" aria-live="polite"></div></form></dialog>
+            <div class="loading-overlay" id="loading-overlay" hidden role="status" aria-live="assertive" aria-busy="true"><div class="loading-card"><div class="loading-spinner" aria-hidden="true"></div><strong id="loading-title">Please wait</strong><p id="loading-message">Processing your request…</p></div></div>
             <script>
+            const loadingOverlay=document.getElementById('loading-overlay');
+            const loadingTitle=document.getElementById('loading-title');
+            const loadingMessage=document.getElementById('loading-message');
+            function showLoading(title,message){loadingTitle.textContent=title;loadingMessage.textContent=message;loadingOverlay.hidden=false;document.body.setAttribute('aria-busy','true');}
+            function hideLoading(){loadingOverlay.hidden=true;document.body.removeAttribute('aria-busy');}
             document.getElementById('logout').addEventListener('click',async()=>{
-              const csrfResponse=await fetch('/api/auth/csrf',{credentials:'same-origin'});
-              const csrf=await csrfResponse.json();
-              await fetch('/api/auth/logout',{method:'POST',credentials:'same-origin',headers:{'X-CSRF-Token':csrf.csrfToken}});
-              location.replace('/login');
+              showLoading('Signing out','Closing the administrator session…');
+              try{
+                const csrfResponse=await fetch('/api/auth/csrf',{credentials:'same-origin'});
+                const csrf=await csrfResponse.json();
+                await fetch('/api/auth/logout',{method:'POST',credentials:'same-origin',headers:{'X-CSRF-Token':csrf.csrfToken}});
+                location.replace('/login');
+              }catch(error){hideLoading();}
             });
             const messageDialog=document.getElementById('message-dialog');
             const messageForm=document.getElementById('message-form');
@@ -126,7 +144,7 @@ public static class DashboardHtmlRenderer
             messageForm.addEventListener('submit',async event=>{
               event.preventDefault();
               const button=messageForm.querySelector('button[type="submit"]');
-              button.disabled=true;messageResult.textContent='Sending...';
+              button.disabled=true;messageResult.textContent='Sending...';showLoading('Sending message','Waiting for Telegram to confirm delivery…');
               try{
                 const csrfResponse=await fetch('/api/auth/csrf',{credentials:'same-origin'});
                 const csrf=await csrfResponse.json();
@@ -137,7 +155,7 @@ public static class DashboardHtmlRenderer
                 messageResult.textContent=messageBotId?'Message sent':'Sent: '+data.sent+', failed: '+data.failed;
                 if(response.ok)setTimeout(()=>messageDialog.close(),900);
               }catch(error){messageResult.textContent=error.message||'Message failed';}
-              finally{button.disabled=false;}
+              finally{button.disabled=false;hideLoading();}
             });
             document.addEventListener('click',async event=>{
               const button=event.target.closest('button[data-action]');
@@ -146,7 +164,9 @@ public static class DashboardHtmlRenderer
               const result=cell.querySelector('.operation-result');
               const logs=cell.querySelector('.bot-logs');
               const buttons=cell.querySelectorAll('button[data-action]');
+              let shouldReload=false;
               buttons.forEach(item=>item.disabled=true);
+              showLoading(button.dataset.action==='logs'?'Loading logs':'Updating bot','Please wait while the operation is completed…');
               result.textContent=button.dataset.action==='logs'?'Loading logs…':'Operation in progress…';
               try{
                 let response;
@@ -158,7 +178,7 @@ public static class DashboardHtmlRenderer
                   const isDelete=button.dataset.action==='delete';
                   let confirmation;
                   if(isDelete){
-                    confirmation=prompt('Type DELETE '+cell.dataset.bot+' to confirm recoverable deletion');
+                    confirmation=prompt('Type DELETE '+cell.dataset.bot+' to permanently delete the bot and all its data. This cannot be undone.');
                     if(confirmation===null){result.textContent='Delete cancelled';return;}
                   }
                   response=await fetch('/api/bots/'+encodeURIComponent(cell.dataset.bot)+'/'+button.dataset.action,{
@@ -170,9 +190,13 @@ public static class DashboardHtmlRenderer
                 const data=await response.json();
                 if(button.dataset.action==='logs'&&response.ok){logs.textContent=(data.logs||'').trim()||'No logs yet.';logs.hidden=false;}
                 result.textContent=data.message||data.outcome||(response.ok?'Completed':'Operation failed');
-                if(button.dataset.action!=='logs'&&response.ok){setTimeout(()=>location.reload(),500);}
+                if(button.dataset.action!=='logs'&&response.ok){shouldReload=true;}
               }catch(error){result.textContent='Operation failed';}
-              finally{buttons.forEach(item=>item.disabled=false);}
+              finally{
+                buttons.forEach(item=>item.disabled=false);
+                if(shouldReload){showLoading('Refreshing bot data','Loading the latest state…');setTimeout(()=>location.reload(),300);}
+                else{hideLoading();}
+              }
             });
             document.addEventListener('submit',async event=>{
               const form=event.target.closest('form.credential-form');
@@ -180,7 +204,9 @@ public static class DashboardHtmlRenderer
               event.preventDefault();
               const button=form.querySelector('button[type="submit"]');
               const result=form.querySelector('.credential-result');
+              let shouldReload=false;
               button.disabled=true;
+              showLoading('Updating credentials','Restarting and checking the bot health…');
               result.textContent='Credential update in progress…';
               try{
                 const csrfResponse=await fetch('/api/auth/csrf',{credentials:'same-origin'});
@@ -193,9 +219,13 @@ public static class DashboardHtmlRenderer
                 });
                 const data=await response.json();
                 result.textContent=data.message||data.outcome||'Credential update failed';
-                if(response.ok){setTimeout(()=>location.reload(),500);}
+                if(response.ok){shouldReload=true;}
               }catch(error){result.textContent='Credential update failed';}
-              finally{form.reset();button.disabled=false;}
+              finally{
+                form.reset();button.disabled=false;
+                if(shouldReload){showLoading('Refreshing bot data','Loading the latest state…');setTimeout(()=>location.reload(),300);}
+                else{hideLoading();}
+              }
             });
             document.addEventListener('submit',async event=>{
               const form=event.target.closest('form.provision-form');
@@ -203,7 +233,9 @@ public static class DashboardHtmlRenderer
               event.preventDefault();
               const button=form.querySelector('button[type="submit"]');
               const result=form.querySelector('.provision-result');
+              let shouldReload=false;
               button.disabled=true;
+              showLoading('Creating bot','Preparing files, container, route and health checks…');
               result.textContent='Provisioning in progress…';
               try{
                 const csrfResponse=await fetch('/api/auth/csrf',{credentials:'same-origin'});
@@ -216,9 +248,13 @@ public static class DashboardHtmlRenderer
                 });
                 const data=await response.json();
                 result.textContent=data.outcome||(response.ok?'Completed':'Provisioning failed');
-                if(response.ok&&data.outcome==='succeeded'){form.reset();location.reload();}
+                if(response.ok&&data.outcome==='succeeded'){form.reset();shouldReload=true;}
               }catch(error){result.textContent='Provisioning failed';}
-              finally{button.disabled=false;}
+              finally{
+                button.disabled=false;
+                if(shouldReload){showLoading('Refreshing bot list','Loading the new bot…');setTimeout(()=>location.reload(),300);}
+                else{hideLoading();}
+              }
             });
             </script></body></html>
             """);
@@ -260,6 +296,10 @@ public static class DashboardHtmlRenderer
         if (safeBytes >= 1024) return FormatUnit(safeBytes / 1024, "KB");
         return $"{safeBytes.ToString("0", CultureInfo.InvariantCulture)} B";
     }
+
+    private static string FormatNullableBytes(long? bytes) => bytes.HasValue
+        ? FormatBytes(bytes.Value)
+        : "unknown";
 
     private static string FormatUnit(double value, string unit) =>
         $"{value.ToString("0.0", CultureInfo.InvariantCulture)} {unit}";

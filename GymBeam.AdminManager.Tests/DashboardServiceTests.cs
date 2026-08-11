@@ -22,7 +22,8 @@ public class DashboardServiceTests
                 "healthy",
                 TimeSpan.FromHours(2),
                 new DateTimeOffset(2026, 8, 10, 12, 0, 0, TimeSpan.Zero),
-                "available")
+                "available",
+                96L * 1024 * 1024)
         });
         var service = new DashboardService(registry, docker);
 
@@ -33,6 +34,7 @@ public class DashboardServiceTests
         Assert.Equal("running", known.State);
         Assert.Equal("healthy", known.Health);
         Assert.Equal(TimeSpan.FromHours(2), known.Uptime);
+        Assert.Equal(96L * 1024 * 1024, known.MemoryBytes);
         BotDashboardItem missing = Assert.Single(items, item => item.Id == "bot2");
         Assert.Equal("unknown", missing.State);
         Assert.Equal("unknown", missing.Health);

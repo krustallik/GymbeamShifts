@@ -84,8 +84,17 @@ public class DashboardHtmlRendererTests
         Assert.Contains("data-action=\"logs\"", html);
         Assert.Contains("class=\"bot-logs\"", html);
         Assert.Contains("button.dataset.action!=='logs'&&response.ok", html);
-        Assert.Contains("setTimeout(()=>location.reload(),500)", html);
+        Assert.Contains("setTimeout(()=>location.reload(),300)", html);
         Assert.Contains("No logs yet.", html);
+        Assert.Contains("id=\"loading-overlay\"", html);
+        Assert.Contains("class=\"loading-spinner\"", html);
+        Assert.Contains("function showLoading", html);
+        Assert.Contains("function hideLoading", html);
+        Assert.Contains("Updating bot", html);
+        Assert.Contains("Loading logs", html);
+        Assert.Contains("Creating bot", html);
+        Assert.Contains("Updating credentials", html);
+        Assert.Contains("Sending message", html);
         Assert.Contains("textContent", html);
         Assert.DoesNotContain("innerHTML", html);
     }
@@ -150,8 +159,20 @@ public class DashboardHtmlRendererTests
         string html = DashboardHtmlRenderer.Render([item]);
 
         Assert.Contains("Storage: 151.0 MB", html);
-        Assert.Contains("storage-value warning", html);
+        Assert.Contains("metric-value warning", html);
         Assert.Contains("<th>Storage</th>", html);
+    }
+
+    [Fact]
+    public void Render_ShowsCurrentRamForEachBotAndTotal()
+    {
+        BotDashboardItem item = Item() with { MemoryBytes = 128L * 1024 * 1024 };
+
+        string html = DashboardHtmlRenderer.Render([item]);
+
+        Assert.Contains("RAM: 128.0 MB", html);
+        Assert.Contains("<th>RAM</th>", html);
+        Assert.Contains(">128.0 MB</span>", html);
     }
 
     private static BotDashboardItem Item() => new(

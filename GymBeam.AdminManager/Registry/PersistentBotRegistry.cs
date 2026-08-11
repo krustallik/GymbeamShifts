@@ -195,6 +195,28 @@ public sealed class PersistentBotRegistry : IManagedBotRegistryMutations
         }
     }
 
+    public async Task RemoveAsync(string botId, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(botId);
+        await _fileLock.WaitAsync(cancellationToken);
+        try
+        {
+            RegistryDocument document = await ReadAsync(cancellationToken);
+            int removed = document.Bots.RemoveAll(existing =>
+                string.Equals(existing.Id, botId, StringComparison.Ordinal));
+            if (removed == 0)
+            {
+                throw new KeyNotFoundException("Managed bot was not found.");
+            }
+
+            await WriteAsync(document, cancellationToken);
+        }
+        finally
+        {
+            _fileLock.Release();
+        }
+    }
+
     private static bool HasIdentityConflict(ManagedBot left, ManagedBot right) =>
         string.Equals(left.Id, right.Id, StringComparison.OrdinalIgnoreCase)
         || string.Equals(left.ContainerName, right.ContainerName, StringComparison.OrdinalIgnoreCase)

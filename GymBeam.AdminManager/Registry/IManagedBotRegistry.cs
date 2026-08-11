@@ -9,4 +9,5 @@ public interface IManagedBotRegistryMutations : IManagedBotRegistry
 {
     Task AddActiveAsync(ManagedBot bot, CancellationToken cancellationToken = default);
     Task UpdateAsync(ManagedBot bot, CancellationToken cancellationToken = default);
+    Task RemoveAsync(string botId, CancellationToken cancellationToken = default);
 }

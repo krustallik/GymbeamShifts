@@ -91,7 +91,7 @@ internal static class ProvisioningEndpoints
 
     private static int Status(string outcome) => outcome switch
     {
-        "succeeded" or "already_exists" or "already_enabled" or "already_disabled" or "already_deleted" => StatusCodes.Status200OK,
+        "succeeded" or "already_exists" or "already_enabled" or "already_disabled" => StatusCodes.Status200OK,
         "invalid_request" or "confirmation_required" => StatusCodes.Status400BadRequest,
         "bot_not_found" => StatusCodes.Status404NotFound,
         "docker_unavailable" or "caddy_unavailable" or "storage_unavailable" => StatusCodes.Status503ServiceUnavailable,

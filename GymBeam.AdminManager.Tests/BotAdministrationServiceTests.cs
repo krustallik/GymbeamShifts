@@ -11,7 +11,7 @@ public sealed class BotAdministrationServiceTests : IDisposable
     private readonly string _directory = Path.Combine(Path.GetTempPath(), $"admin-lifecycle-{Guid.NewGuid():N}");
 
     [Fact]
-    public async Task DeleteAsync_RequiresExactExplicitConfirmationBeforeBackupOrMutation()
+    public async Task DeleteAsync_RequiresExactExplicitConfirmationBeforeMutation()
     {
         var context = Create();
 
@@ -24,7 +24,7 @@ public sealed class BotAdministrationServiceTests : IDisposable
     }
 
     [Fact]
-    public async Task DeleteAsync_BackupPrecedesEveryDestructiveStepAndLeavesRecoverableTombstone()
+    public async Task DeleteAsync_RemovesEveryResourceAndRegistryEntryWithoutBackup()
     {
         var context = Create();
 
@@ -32,29 +32,29 @@ public sealed class BotAdministrationServiceTests : IDisposable
             "bot3", "DELETE bot3", "admin", "127.0.0.1");
 
         Assert.Equal("succeeded", result.Outcome);
-        Assert.Equal(["backup", "route.remove", "container.remove", "files.remove"], context.Calls);
-        ManagedBot deleted = Assert.Single(await context.Registry.GetAllAsync());
-        Assert.False(deleted.Enabled);
-        Assert.Equal("deleted", deleted.LifecycleState);
-        Assert.Equal("backup-bot3", deleted.DeletedBackupId);
+        Assert.Equal(["route.remove", "container.remove", "files.remove", "residual.remove"], context.Calls);
+        Assert.Empty(await context.Registry.GetAllAsync());
 
         BotAdministrationResult repeated = await context.Service.DeleteAsync(
             "bot3", "DELETE bot3", "admin", "127.0.0.1");
-        Assert.Equal("already_deleted", repeated.Outcome);
+        Assert.Equal("bot_not_found", repeated.Outcome);
         Assert.Equal(4, context.Calls.Count);
     }
 
     [Fact]
-    public async Task DeleteAsync_BackupFailurePerformsNoDestructiveAction()
+    public async Task DeleteAsync_ResourceFailureKeepsRetryableRegistryEntry()
     {
         var context = Create();
-        context.Backups.Failure = true;
+        context.Resources.FailureCall = "container.remove";
 
         BotAdministrationResult result = await context.Service.DeleteAsync(
             "bot3", "DELETE bot3", "admin", "127.0.0.1");
 
-        Assert.Equal("backup_failed", result.Outcome);
-        Assert.Equal(["backup"], context.Calls);
+        Assert.Equal("resource_failed", result.Outcome);
+        Assert.Equal(["route.remove", "container.remove"], context.Calls);
+        ManagedBot failed = Assert.Single(await context.Registry.GetAllAsync());
+        Assert.False(failed.Enabled);
+        Assert.Equal("delete_failed", failed.LifecycleState);
     }
 
     [Fact]
@@ -120,38 +120,37 @@ public sealed class BotAdministrationServiceTests : IDisposable
     }
 
     [Fact]
-    public async Task Recovery_ResumesDeleteUsingExistingBackupWithoutCreatingAnother()
+    public async Task Recovery_ResumesIncompleteDeleteAndRemovesRegistryEntry()
     {
-        var context = Create(enabled: false, lifecycleState: "deleting", backupId: "backup-bot3");
+        var context = Create(enabled: false, lifecycleState: "deleting");
         var recovery = new BotAdministrationRecoveryService(context.Registry, context.Service);
 
         await recovery.RecoverAsync();
 
-        Assert.DoesNotContain("backup", context.Calls);
-        Assert.Equal("deleted", (await context.Registry.GetAllAsync()).Single().LifecycleState);
+        Assert.Equal(["route.remove", "container.remove", "files.remove", "residual.remove"], context.Calls);
+        Assert.Empty(await context.Registry.GetAllAsync());
     }
 
-    private Context Create(bool enabled = true, string? lifecycleState = null, string? backupId = null)
+    private Context Create(bool enabled = true, string? lifecycleState = null)
     {
         var calls = new List<string>();
         var registry = new MutableRegistry(Bot(enabled) with
         {
-            LifecycleState = lifecycleState ?? (enabled ? "active" : "disabled"),
-            DeletedBackupId = backupId
+            LifecycleState = lifecycleState ?? (enabled ? "active" : "disabled")
         });
         var resources = new Resources(calls);
         var lifecycle = new Lifecycle(calls);
-        var backups = new Backups(calls);
+        var residualData = new ResidualData(calls);
         var service = new BotAdministrationService(
             registry,
             resources,
             lifecycle,
-            backups,
+            residualData,
             new BotOperationCoordinator(),
             new AuditLogger(Path.Combine(_directory, "audit.jsonl"), TimeProvider.System),
             TimeProvider.System,
             "example.test");
-        return new Context(service, registry, resources, lifecycle, backups, calls);
+        return new Context(service, registry, resources, lifecycle, calls);
     }
 
     private static ManagedBot Bot(bool enabled) => new(
@@ -172,26 +171,33 @@ public sealed class BotAdministrationServiceTests : IDisposable
         MutableRegistry Registry,
         Resources Resources,
         Lifecycle Lifecycle,
-        Backups Backups,
         List<string> Calls);
 
     private sealed class MutableRegistry(ManagedBot bot) : IManagedBotRegistryMutations
     {
-        private ManagedBot _bot = bot;
+        private readonly List<ManagedBot> _bots = [bot];
         public List<ManagedBot> History { get; } = [];
         public Task<IReadOnlyList<ManagedBot>> GetAllAsync(CancellationToken cancellationToken = default) =>
-            Task.FromResult<IReadOnlyList<ManagedBot>>([_bot]);
+            Task.FromResult<IReadOnlyList<ManagedBot>>(_bots.ToArray());
         public Task AddActiveAsync(ManagedBot value, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task UpdateAsync(ManagedBot value, CancellationToken cancellationToken = default)
         {
-            _bot = value;
+            int index = _bots.FindIndex(bot => bot.Id == value.Id);
+            if (index < 0) throw new KeyNotFoundException();
+            _bots[index] = value;
             History.Add(value);
+            return Task.CompletedTask;
+        }
+        public Task RemoveAsync(string botId, CancellationToken cancellationToken = default)
+        {
+            _bots.RemoveAll(bot => bot.Id == botId);
             return Task.CompletedTask;
         }
     }
 
     private sealed class Resources(List<string> calls) : IProvisioningResources
     {
+        public string? FailureCall;
         public Task<ResourceResult> PreflightAsync(ProvisioningSpec spec, CancellationToken cancellationToken = default) => Success();
         public Task<ResourceResult> CreateFilesAsync(ProvisioningSpec spec, ProvisionBotRequest request, CancellationToken cancellationToken = default) => Success();
         public Task<ResourceResult> CreateContainerAsync(ProvisioningSpec spec, CancellationToken cancellationToken = default) => Success();
@@ -201,7 +207,13 @@ public sealed class BotAdministrationServiceTests : IDisposable
         public Task<ResourceResult> RemoveRouteAsync(ProvisioningSpec spec, CancellationToken cancellationToken = default) => Call("route.remove");
         public Task<ResourceResult> RemoveContainerAsync(ProvisioningSpec spec, CancellationToken cancellationToken = default) => Call("container.remove");
         public Task<ResourceResult> RemoveFilesAsync(ProvisioningSpec spec, CancellationToken cancellationToken = default) => Call("files.remove");
-        private Task<ResourceResult> Call(string call) { calls.Add(call); return Success(); }
+        private Task<ResourceResult> Call(string call)
+        {
+            calls.Add(call);
+            return Task.FromResult(call == FailureCall
+                ? ResourceResult.Failure("resource_failed")
+                : ResourceResult.Success());
+        }
         private static Task<ResourceResult> Success() => Task.FromResult(ResourceResult.Success());
     }
 
@@ -215,15 +227,13 @@ public sealed class BotAdministrationServiceTests : IDisposable
         }
     }
 
-    private sealed class Backups(List<string> calls) : IBotBackupStore
+    private sealed class ResidualData(List<string> calls) : IBotResidualDataCleaner
     {
-        public bool Failure;
-        public Task<BotBackupResult> CreateAsync(ManagedBot bot, CancellationToken cancellationToken = default)
+        public Task<ResourceResult> RemoveAsync(string botId, CancellationToken cancellationToken = default)
         {
-            calls.Add("backup");
-            return Task.FromResult(Failure
-                ? new BotBackupResult(false, "backup_failed", null)
-                : new BotBackupResult(true, "succeeded", $"backup-{bot.Id}"));
+            calls.Add("residual.remove");
+            return Task.FromResult(ResourceResult.Success());
         }
     }
+
 }

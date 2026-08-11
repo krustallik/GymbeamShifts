@@ -39,7 +39,8 @@ public sealed class DashboardService(
                 status.Uptime,
                 status.LastUpdatedAtUtc,
                 status.Availability,
-                GetDirectorySize(bot.InstancePath));
+                GetDirectorySize(bot.InstancePath),
+                status.MemoryBytes);
         }).ToArray();
     }
 

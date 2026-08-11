@@ -113,6 +113,24 @@ public class PersistentBotRegistryTests : IDisposable
         Assert.DoesNotContain("GYMBEAM_AUTH_PASSWORD", audit);
     }
 
+    [Fact]
+    public async Task RemoveAsync_DeletesIdentityAndAllowsSameBotIdToBeRegisteredAgain()
+    {
+        string instancesPath = CreateExistingInstances();
+        string registryPath = Path.Combine(_directory, "storage", "bots.json");
+        var registry = new PersistentBotRegistry(registryPath, _clock);
+        var descriptor = new ExistingBotDescriptor(
+            "bot1", "Bot 1", "gymbeam-bot-1", "gymbeam-shifts-bot-1",
+            Path.Combine(instancesPath, "bot1"));
+        Assert.NotNull(await registry.TryImportAsync(descriptor));
+
+        await registry.RemoveAsync("bot1");
+        ManagedBot? recreated = await registry.TryImportAsync(descriptor);
+
+        Assert.NotNull(recreated);
+        Assert.Single(await registry.GetAllAsync());
+    }
+
     private ExistingBotsImporter CreateImporter(string instancesPath)
     {
         string storagePath = Path.Combine(_directory, "storage");

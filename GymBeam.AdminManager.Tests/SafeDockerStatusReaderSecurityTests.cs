@@ -13,9 +13,13 @@ public class SafeDockerStatusReaderSecurityTests
     {
         string list = $"[{ListEntry(Bot1ContainerId, "bot1", 1)}]";
         var handler = new RecordingHttpMessageHandler((request, _, _) => Task.FromResult(
-            request.RequestUri!.AbsolutePath == "/containers/json"
-                ? JsonResponse(list)
-                : JsonResponse(InspectResponse(Bot1ContainerId, "bot1", 1))));
+            request.RequestUri!.AbsolutePath switch
+            {
+                "/containers/json" => JsonResponse(list),
+                var path when path.EndsWith("/stats", StringComparison.Ordinal) =>
+                    JsonResponse(StatsResponse(150L * 1024 * 1024, 10L * 1024 * 1024)),
+                _ => JsonResponse(InspectResponse(Bot1ContainerId, "bot1", 1))
+            }));
         var reader = CreateReader(handler);
 
         IReadOnlyDictionary<string, BotRuntimeStatus> statuses = await reader.GetStatusesAsync([CreateBot("bot1")]);
@@ -24,6 +28,7 @@ public class SafeDockerStatusReaderSecurityTests
         Assert.Equal("running", status.State);
         Assert.Equal("healthy", status.Health);
         Assert.Equal(TimeSpan.FromHours(2), status.Uptime);
+        Assert.Equal(140L * 1024 * 1024, status.MemoryBytes);
         Assert.Equal(new DateTimeOffset(2026, 8, 10, 12, 0, 0, TimeSpan.Zero), status.LastUpdatedAtUtc);
         Assert.Collection(
             handler.Requests,
@@ -40,6 +45,13 @@ public class SafeDockerStatusReaderSecurityTests
                 Assert.Equal(HttpMethod.Get, inspectRequest.Method);
                 Assert.Equal($"/containers/{Bot1ContainerId}/json", inspectRequest.PathAndQuery);
                 Assert.DoesNotContain("gymbeam-shifts-bot-1", inspectRequest.PathAndQuery);
+            },
+            statsRequest =>
+            {
+                Assert.Equal(HttpMethod.Get, statsRequest.Method);
+                Assert.Equal(
+                    $"/containers/{Bot1ContainerId}/stats?stream=false&one-shot=true",
+                    statsRequest.PathAndQuery);
             });
     }
 

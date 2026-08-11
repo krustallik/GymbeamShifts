@@ -14,7 +14,8 @@ public sealed record BotRuntimeStatus(
     string Health,
     TimeSpan? Uptime,
     DateTimeOffset? LastUpdatedAtUtc,
-    string Availability)
+    string Availability,
+    long? MemoryBytes = null)
 {
     public static BotRuntimeStatus Unknown(string reason = "unknown")
     {
@@ -24,6 +25,7 @@ public sealed record BotRuntimeStatus(
             "unknown",
             Uptime: null,
             LastUpdatedAtUtc: null,
-            Availability: "unknown");
+            Availability: "unknown",
+            MemoryBytes: null);
     }
 }

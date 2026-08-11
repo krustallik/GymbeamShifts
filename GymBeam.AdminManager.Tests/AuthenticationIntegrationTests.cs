@@ -83,6 +83,8 @@ public class AuthenticationIntegrationTests : IDisposable
         Assert.Equal(HttpStatusCode.OK, login.StatusCode);
         Assert.Equal("text/html", login.Content.Headers.ContentType?.MediaType);
         Assert.Contains("id=\"login-form\"", loginHtml);
+        Assert.Contains("id=\"login-loading\"", loginHtml);
+        Assert.Contains("class=\"spinner\"", loginHtml);
         Assert.Contains("/api/auth/csrf", loginHtml);
         Assert.Contains("/api/auth/login", loginHtml);
     }

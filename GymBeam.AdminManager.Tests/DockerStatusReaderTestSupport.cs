@@ -83,6 +83,15 @@ internal static class DockerStatusReaderTestSupport
         """;
     }
 
+    public static string StatsResponse(long usage, long inactiveFile = 0) => $$"""
+        {
+          "memory_stats": {
+            "usage": {{usage}},
+            "stats": { "inactive_file": {{inactiveFile}} }
+          }
+        }
+        """;
+
     public static HttpResponseMessage JsonResponse(string json, HttpStatusCode status = HttpStatusCode.OK)
     {
         return new HttpResponseMessage(status)

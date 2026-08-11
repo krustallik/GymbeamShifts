@@ -7,18 +7,11 @@ namespace GymBeam.AdminManager.Provisioning;
 
 public sealed record BotAdministrationResult(string Outcome);
 
-public sealed record BotBackupResult(bool Succeeded, string Outcome, string? BackupId);
-
-public interface IBotBackupStore
-{
-    Task<BotBackupResult> CreateAsync(ManagedBot bot, CancellationToken cancellationToken = default);
-}
-
 public sealed class BotAdministrationService(
     IManagedBotRegistryMutations registry,
     IProvisioningResources resources,
     IDockerLifecycleController lifecycle,
-    IBotBackupStore backups,
+    IBotResidualDataCleaner residualData,
     BotOperationCoordinator coordinator,
     AuditLogger audit,
     TimeProvider timeProvider,
@@ -56,32 +49,17 @@ public sealed class BotAdministrationService(
             return new BotAdministrationResult("bot_not_found");
         }
 
-        if (bot.LifecycleState == "deleted")
-        {
-            return new BotAdministrationResult("already_deleted");
-        }
-
         using IDisposable? lease = await coordinator.TryAcquireAsync(botId, cancellationToken);
         if (lease is null)
         {
             return new BotAdministrationResult("operation_in_progress");
         }
 
-        BotBackupResult backup = bot.DeletedBackupId is null
-            ? await backups.CreateAsync(bot, cancellationToken)
-            : new BotBackupResult(true, "succeeded", bot.DeletedBackupId);
-        if (!backup.Succeeded || string.IsNullOrWhiteSpace(backup.BackupId))
-        {
-            await WriteAuditAsync("bot.delete", backup.Outcome, actor, botId, remoteAddress, cancellationToken);
-            return new BotAdministrationResult(backup.Outcome);
-        }
-
         bot = bot with
         {
             Enabled = false,
             UpdatedAtUtc = timeProvider.GetUtcNow(),
-            LifecycleState = "deleting",
-            DeletedBackupId = backup.BackupId
+            LifecycleState = "deleting"
         };
         await registry.UpdateAsync(bot, cancellationToken);
         ProvisioningSpec spec = ToSpec(bot);
@@ -89,7 +67,8 @@ public sealed class BotAdministrationService(
         {
             () => resources.RemoveRouteAsync(spec, cancellationToken),
             () => resources.RemoveContainerAsync(spec, cancellationToken),
-            () => resources.RemoveFilesAsync(spec, cancellationToken)
+            () => resources.RemoveFilesAsync(spec, cancellationToken),
+            () => residualData.RemoveAsync(bot.Id, cancellationToken)
         })
         {
             ResourceResult result = await step();
@@ -105,11 +84,7 @@ public sealed class BotAdministrationService(
             }
         }
 
-        await registry.UpdateAsync(bot with
-        {
-            LifecycleState = "deleted",
-            UpdatedAtUtc = timeProvider.GetUtcNow()
-        }, cancellationToken);
+        await registry.RemoveAsync(bot.Id, cancellationToken);
         await WriteAuditAsync("bot.delete", "succeeded", actor, botId, remoteAddress, cancellationToken);
         return new BotAdministrationResult("succeeded");
     }

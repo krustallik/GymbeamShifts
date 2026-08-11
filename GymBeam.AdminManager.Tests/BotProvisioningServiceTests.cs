@@ -265,6 +265,11 @@ public class BotProvisioningServiceTests : IDisposable
             return Task.CompletedTask;
         }
         public Task UpdateAsync(ManagedBot bot, CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task RemoveAsync(string botId, CancellationToken cancellationToken = default)
+        {
+            _bots.RemoveAll(bot => string.Equals(bot.Id, botId, StringComparison.Ordinal));
+            return Task.CompletedTask;
+        }
     }
 
     private sealed class InMemoryProvisioningTransactions : IProvisioningTransactionStore

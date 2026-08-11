@@ -175,8 +175,42 @@ public sealed class SafeDockerStatusReader(
             DateTimeOffset? finished = ReadTimestamp(stateElement, "FinishedAt");
             TimeSpan? uptime = CalculateUptime(state, started, finished);
             DateTimeOffset? lastUpdated = state == "running" ? started : finished ?? started ?? created;
+            long? memoryBytes = state == "running"
+                ? await ReadMemoryUsageAsync(containerId, cancellationToken)
+                : null;
 
-            return new BotRuntimeStatus(state, health, uptime, lastUpdated, "available");
+            return new BotRuntimeStatus(state, health, uptime, lastUpdated, "available", memoryBytes);
+        }
+    }
+
+    private async Task<long?> ReadMemoryUsageAsync(string containerId, CancellationToken cancellationToken)
+    {
+        JsonDocument? statsDocument = await TryGetJsonAsync(
+            $"/containers/{containerId}/stats?stream=false&one-shot=true",
+            cancellationToken);
+        if (statsDocument is null) return null;
+
+        using (statsDocument)
+        {
+            JsonElement root = statsDocument.RootElement;
+            if (!root.TryGetProperty("memory_stats", out JsonElement memory)
+                || !memory.TryGetProperty("usage", out JsonElement usageElement)
+                || !usageElement.TryGetInt64(out long usage)
+                || usage < 0)
+            {
+                return null;
+            }
+
+            long inactiveFile = 0;
+            if (memory.TryGetProperty("stats", out JsonElement stats)
+                && stats.TryGetProperty("inactive_file", out JsonElement inactiveElement)
+                && inactiveElement.TryGetInt64(out long parsedInactive)
+                && parsedInactive > 0)
+            {
+                inactiveFile = parsedInactive;
+            }
+
+            return Math.Max(0, usage - Math.Min(usage, inactiveFile));
         }
     }
 

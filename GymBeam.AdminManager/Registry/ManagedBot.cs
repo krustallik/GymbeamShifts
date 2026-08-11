@@ -13,5 +13,4 @@ public sealed record ManagedBot(
 {
     public string LifecycleState { get; init; } = "active";
     public string? PublicHost { get; init; }
-    public string? DeletedBackupId { get; init; }
 }

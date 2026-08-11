@@ -279,6 +279,7 @@ internal static class AuthenticationEndpoints
             main{width:min(25rem,100%);padding:30px;background:var(--surface);border:1px solid var(--border);border-radius:14px;box-shadow:0 24px 70px #0008}.brand{display:flex;align-items:center;gap:12px;margin-bottom:24px}.brand-mark{display:grid;place-items:center;width:44px;height:44px;border-radius:11px;background:var(--blue);font-size:1.35rem;font-weight:800}h1{margin:0;font-size:1.45rem}.subtitle{margin:.35rem 0 0;color:var(--muted);font-size:.9rem}
             label{display:grid;gap:7px;margin-top:15px;color:#d1d5db;font-size:.88rem;font-weight:600}input{width:100%;padding:11px 12px;border:1px solid var(--border);border-radius:8px;background:var(--input);color:var(--text);font:inherit;outline:none}input:focus{border-color:#60a5fa;box-shadow:0 0 0 3px #2563eb33}
             button{width:100%;margin-top:20px;padding:11px;border:0;border-radius:8px;background:var(--blue);color:white;font:inherit;font-weight:700;cursor:pointer}button:hover{background:#1d4ed8}button:disabled{opacity:.6;cursor:wait}#error{min-height:1.25rem;margin-top:14px;color:#fca5a5;font-size:.88rem}.security-note{margin:18px 0 0;padding-top:16px;border-top:1px solid var(--border);color:var(--muted);font-size:.78rem;text-align:center}
+            .loading-overlay{position:fixed;inset:0;z-index:1000;display:grid;place-items:center;padding:20px;background:#020617dc;backdrop-filter:blur(4px)}.loading-overlay[hidden]{display:none}.loading-card{width:min(360px,100%);padding:28px 22px;border:1px solid #3b82f6;border-radius:15px;background:#111827;text-align:center;box-shadow:0 24px 70px #000b}.spinner{width:46px;height:46px;margin:0 auto 17px;border:5px solid #334155;border-top-color:#3b82f6;border-radius:50%;animation:spin .8s linear infinite}.loading-card strong{display:block}.loading-card p{margin:8px 0 0;color:var(--muted);font-size:.88rem}@keyframes spin{to{transform:rotate(360deg)}}
           </style>
         </head>
         <body>
@@ -292,13 +293,16 @@ internal static class AuthenticationEndpoints
             </form>
             <p class="security-note">Protected administrative access</p>
           </main>
+          <div class="loading-overlay" id="login-loading" hidden role="status" aria-live="assertive" aria-busy="true"><div class="loading-card"><div class="spinner" aria-hidden="true"></div><strong>Signing in</strong><p>Checking your credentials and loading the admin panel…</p></div></div>
           <script>
             document.getElementById('login-form').addEventListener('submit',async event=>{
               event.preventDefault();
               const form=event.currentTarget;
               const button=form.querySelector('button');
               const error=document.getElementById('error');
-              button.disabled=true;error.textContent='';
+              const loading=document.getElementById('login-loading');
+              let navigating=false;
+              button.disabled=true;error.textContent='';loading.hidden=false;
               try{
                 const csrfResponse=await fetch('/api/auth/csrf',{credentials:'same-origin'});
                 if(!csrfResponse.ok)throw new Error('Unable to start login');
@@ -313,9 +317,9 @@ internal static class AuthenticationEndpoints
                   const data=await response.json().catch(()=>({}));
                   throw new Error(data.error||'Login failed');
                 }
-                location.replace('/');
+                navigating=true;location.replace('/');
               }catch(loginError){error.textContent=loginError.message||'Login failed';}
-              finally{button.disabled=false;}
+              finally{button.disabled=false;if(!navigating)loading.hidden=true;}
             });
           </script>
         </body>

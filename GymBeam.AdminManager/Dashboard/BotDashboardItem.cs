@@ -9,4 +9,5 @@ public sealed record BotDashboardItem(
     TimeSpan? Uptime,
     DateTimeOffset? LastUpdatedAtUtc,
     string Availability,
-    long StorageBytes = 0);
+    long StorageBytes = 0,
+    long? MemoryBytes = null);

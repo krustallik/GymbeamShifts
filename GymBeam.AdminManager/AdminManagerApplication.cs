@@ -170,16 +170,13 @@ public static class AdminManagerApplication
             options.Provisioning.BaseDomain));
         builder.Services.AddSingleton<ProvisioningRecoveryService>();
         builder.Services.AddHostedService<ProvisioningRecoveryHostedService>();
-        builder.Services.AddSingleton<IBotBackupStore>(new AtomicBotBackupStore(
-            options.InstancesPath,
-            Path.Combine(options.StoragePath, "backups"),
-            timeProvider,
-            options.Provisioning.MinimumFreeDiskBytes));
+        builder.Services.AddSingleton<IBotResidualDataCleaner>(
+            new BotResidualDataCleaner(options.StoragePath));
         builder.Services.AddSingleton(serviceProvider => new BotAdministrationService(
             serviceProvider.GetRequiredService<IManagedBotRegistryMutations>(),
             serviceProvider.GetRequiredService<IProvisioningResources>(),
             serviceProvider.GetRequiredService<IDockerLifecycleController>(),
-            serviceProvider.GetRequiredService<IBotBackupStore>(),
+            serviceProvider.GetRequiredService<IBotResidualDataCleaner>(),
             serviceProvider.GetRequiredService<BotOperationCoordinator>(),
             serviceProvider.GetRequiredService<AuditLogger>(),
             timeProvider,
