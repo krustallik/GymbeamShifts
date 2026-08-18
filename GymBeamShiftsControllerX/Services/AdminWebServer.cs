@@ -462,6 +462,7 @@ namespace GymBeamShiftsControllerX.Services
                 _config.Telegram.BotToken = telegramToken;
                 _config.Telegram.ChatId = chatId;
                 Logger.Log("User-managed credentials updated from bot admin UI.");
+                _credentialsUpdated();
                 WriteJson(context.Response, 200, new
                 {
                     ok = true,
@@ -471,7 +472,6 @@ namespace GymBeamShiftsControllerX.Services
                     validation.TelegramMessage,
                     validation.GymBeamMessage
                 });
-                _credentialsUpdated();
             }
             catch (Exception ex)
             {
