@@ -72,6 +72,23 @@ public sealed class ShiftCheckerWorkflowTests : IDisposable
     }
 
     [Fact]
+    public void CheckForShifts_SkipsNewWorkersShiftAndRegistersNextEligibleShift()
+    {
+        DateTime shiftDate = GetFutureSaturday();
+        string rows =
+            CreateShiftRow(shiftDate, "22:00", "Noví brigádnici - ranná") +
+            CreateShiftRow(shiftDate, "23:00", "Eligible User");
+        NavigateToScenario(CreateScenarioHtml(rows));
+        var checker = CreateChecker(takeLunch: false);
+
+        checker.CheckForShifts();
+
+        Assert.Equal(
+            "#completed-lunch_no-Eligible%20User",
+            new Uri(_driver.Url).Fragment);
+    }
+
+    [Fact]
     public void CheckForShifts_SkipsMalformedExcludedAndUnavailableRows()
     {
         DateTime saturday = GetFutureSaturday();
@@ -126,7 +143,10 @@ public sealed class ShiftCheckerWorkflowTests : IDisposable
         NavigateToScenario(CreateScenarioHtml(rows));
         var checker = CreateChecker(
             takeLunch: false,
-            startTimesToSkip: new List<string> { "21:45" });
+            excludedDates: new List<string>
+            {
+                firstSaturday.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)
+            });
 
         checker.CheckForShifts();
 
@@ -148,6 +168,9 @@ public sealed class ShiftCheckerWorkflowTests : IDisposable
         Assert.Equal(
             "#completed-lunch_yes-Second%20User",
             new Uri(_driver.Url).Fragment);
+        Assert.Equal(
+            "true",
+            _driver.ExecuteScript("return sessionStorage.getItem('immediateReselect');"));
     }
 
     private ShiftChecker CreateChecker(
@@ -211,6 +234,8 @@ public sealed class ShiftCheckerWorkflowTests : IDisposable
                 <tbody id='shiftRows'>{{initialRows}}</tbody>
               </table>
               <div id='modal_subscribe' style='display:none'>
+                <button class='btn-close' onclick='closeSubscription()'>Close</button>
+                <h4 id='shiftTitle'></h4>
                 <label><input id='lunch_yes' name='lunch' type='radio'> Yes</label>
                 <label><input id='lunch_no' name='lunch' type='radio'> No</label>
                 <button id='subscribe_submit' onclick='completeSubscription()'>Confirm</button>
@@ -219,7 +244,11 @@ public sealed class ShiftCheckerWorkflowTests : IDisposable
                 let selectedUser = '';
                 function subscribe(user) {
                   selectedUser = user;
+                  document.getElementById('shiftTitle').textContent = user;
                   document.getElementById('modal_subscribe').style.display = 'block';
+                }
+                function closeSubscription() {
+                  document.getElementById('modal_subscribe').style.display = 'none';
                 }
                 function completeSubscription() {
                   const selectedLunch = document.querySelector("input[name='lunch']:checked").id;
@@ -245,7 +274,10 @@ public sealed class ShiftCheckerWorkflowTests : IDisposable
             <head><meta charset='utf-8'><title>Sequential shifts</title></head>
             <body>
               <button id='cookies-consent-essential' onclick='this.remove()'>Accept cookies</button>
-              <select name='invitations_table_length'><option value='100'>100</option></select>
+              <select name='invitations_table_length' onchange='trackPageSizeSelection(this)'>
+                <option value='10'>10</option>
+                <option value='100'>100</option>
+              </select>
               <table id='invitations_table'>
                 <thead><tr><th>User</th><th>Od</th></tr></thead>
                 <tbody id='shiftRows'>{{firstRow}}</tbody>
@@ -257,6 +289,12 @@ public sealed class ShiftCheckerWorkflowTests : IDisposable
               </div>
               <script>
                 let selectedUser = '';
+                let confirmedInThisDocument = false;
+                function trackPageSizeSelection(select) {
+                  if (confirmedInThisDocument && select.value === '100') {
+                    sessionStorage.setItem('immediateReselect', 'true');
+                  }
+                }
                 function subscribe(user) {
                   selectedUser = user;
                   document.getElementById('modal_subscribe').style.display = 'block';
@@ -265,6 +303,8 @@ public sealed class ShiftCheckerWorkflowTests : IDisposable
                   const lunch = document.querySelector("input[name='lunch']:checked").id;
                   const prefix = selectedUser === 'First User' ? '#step-1-' : '#completed-';
                   history.replaceState(null, '', prefix + lunch + '-' + encodeURIComponent(selectedUser));
+                  document.querySelector("select[name='invitations_table_length']").value = '10';
+                  confirmedInThisDocument = true;
                   document.getElementById('modal_subscribe').style.display = 'none';
                 }
                 if (location.hash.startsWith('#step-1-')) {

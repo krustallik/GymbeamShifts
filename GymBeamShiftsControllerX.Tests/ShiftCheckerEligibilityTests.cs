@@ -51,6 +51,30 @@ public class ShiftCheckerEligibilityTests
     }
 
     [Fact]
+    public void IsRelevantShift_WeekendIgnoresStartTimesToSkip()
+    {
+        var shift = CreateEligibleShift(new DateTime(2026, 6, 20), "18:00");
+
+        Assert.True(InvokeIsRelevant(
+            shift,
+            startTimesToSkip: new List<string> { "18:00" },
+            includedWeekdays: new HashSet<DayOfWeek>()));
+    }
+
+    [Fact]
+    public void IsRelevantShift_HolidayIgnoresStartTimesToSkip()
+    {
+        var holiday = new DateTime(2026, 6, 17);
+        var shift = CreateEligibleShift(holiday, "18:00");
+
+        Assert.True(InvokeIsRelevant(
+            shift,
+            holidays: new HashSet<DateTime> { holiday },
+            startTimesToSkip: new List<string> { "18:00" },
+            includedWeekdays: new HashSet<DayOfWeek>()));
+    }
+
+    [Fact]
     public void IsRelevantShift_SkipsExcludedDates()
     {
         var date = new DateTime(2026, 6, 19);

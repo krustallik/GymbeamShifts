@@ -17,6 +17,8 @@
         public const string CookiesEssentialButtonId = "cookies-consent-essential";
 
         public const string SubscribeModalId = "modal_subscribe";
+        public const string NewWorkersNoticeText = "Noví brigádnici";
+        public const string SubscribeModalDismissSelector = "[data-bs-dismiss='modal'], [data-dismiss='modal'], .btn-close, .close";
         public const string LunchNoRadioId = "lunch_no";
         public const string LunchYesRadioId = "lunch_yes";
         public const string SubscribeSubmitButtonId = "subscribe_submit";

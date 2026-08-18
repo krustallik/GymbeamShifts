@@ -32,12 +32,7 @@ namespace GymBeamShiftsControllerX.Services
                 driver.Navigate().Refresh();
                 Logger.Log("Страница обновлена.");
 
-                var selectElement = wait.Until(
-                    ExpectedConditions.ElementToBeClickable(By.Name(AppConstants.InvitationsTableLengthName))
-                );
-                var dropdown = new SelectElement(selectElement);
-                dropdown.SelectByValue("100");
-                Logger.Log("Выбрано значение 100 в выпадающем меню.");
+                SelectAllShiftsPerPage(wait);
 
                 var sortHeader = wait.Until(
                     ExpectedConditions.ElementToBeClickable(By.CssSelector(AppConstants.SortHeaderSelector))
@@ -153,8 +148,19 @@ namespace GymBeamShiftsControllerX.Services
                         bool subscriptionConfirmed = false;
                         try
                         {
-                            wait.Until(ExpectedConditions.ElementIsVisible(By.Id(AppConstants.SubscribeModalId)));
+                            var subscribeModal = wait.Until(
+                                ExpectedConditions.ElementIsVisible(By.Id(AppConstants.SubscribeModalId))
+                            );
                             Logger.Log("Модальное окно открыто.");
+
+                            if (subscribeModal.Text.Contains(
+                                    AppConstants.NewWorkersNoticeText,
+                                    StringComparison.Ordinal))
+                            {
+                                Logger.Log("Смена предназначена для 'Noví brigádnici'. Пропускаем смену.");
+                                CloseSubscribeModal(subscribeModal, wait);
+                                continue;
+                            }
 
                             string lunchRadioId = rules.TakeLunch
                                 ? AppConstants.LunchYesRadioId
@@ -176,6 +182,7 @@ namespace GymBeamShiftsControllerX.Services
 
                             wait.Until(ExpectedConditions.InvisibilityOfElementLocated(By.Id(AppConstants.SubscribeModalId)));
                             Logger.Log("Модальное окно закрыто.");
+                            SelectAllShiftsPerPage(wait);
                             subscriptionConfirmed = true;
                         }
                         catch (NoSuchElementException ex)
@@ -206,6 +213,35 @@ namespace GymBeamShiftsControllerX.Services
                     return;
                 }
             }
+        }
+
+        private static void SelectAllShiftsPerPage(WebDriverWait wait)
+        {
+            var selectElement = wait.Until(
+                ExpectedConditions.ElementToBeClickable(By.Name(AppConstants.InvitationsTableLengthName))
+            );
+            var dropdown = new SelectElement(selectElement);
+            dropdown.SelectByValue("100");
+            Logger.Log("Выбрано значение 100 в выпадающем меню.");
+        }
+
+        private static void CloseSubscribeModal(IWebElement subscribeModal, WebDriverWait wait)
+        {
+            var dismissButtons = subscribeModal.FindElements(
+                By.CssSelector(AppConstants.SubscribeModalDismissSelector)
+            );
+
+            if (dismissButtons.Count > 0)
+            {
+                dismissButtons[0].Click();
+            }
+            else
+            {
+                subscribeModal.SendKeys(Keys.Escape);
+            }
+
+            wait.Until(ExpectedConditions.InvisibilityOfElementLocated(By.Id(AppConstants.SubscribeModalId)));
+            Logger.Log("Модальное окно пропущенной смены закрыто.");
         }
 
         private static bool TryParseShiftStart(ShiftEntry shift, out DateTime shiftStart)
@@ -241,11 +277,6 @@ namespace GymBeamShiftsControllerX.Services
             int weekendOrHolidayMinHoursAhead,
             DateTime now)
         {
-            if (startTimesToSkip.Contains(shift.TimeFrom))
-            {
-                return false;
-            }
-
             if (excludedDates.Contains(shift.Date.Date))
             {
                 return false;
@@ -255,6 +286,11 @@ namespace GymBeamShiftsControllerX.Services
             bool isWeekend = dow == DayOfWeek.Saturday || dow == DayOfWeek.Sunday;
             bool isIncludedWeekday = includedWeekdays.Contains(dow);
             bool isHoliday = holidays.Contains(shift.Date.Date);
+
+            if (!isWeekend && !isHoliday && startTimesToSkip.Contains(shift.TimeFrom))
+            {
+                return false;
+            }
 
             if (!TryParseShiftStart(shift, out DateTime shiftStart))
             {
