@@ -19,6 +19,9 @@ public sealed class AdminWebUiValidationTests
         Assert.Contains("Правила вибору змін", html);
         Assert.Contains("Мінімум годин до початку зміни", html);
         Assert.Contains("Пріоритетні працівники", html);
+        Assert.Contains("Застосовувати у вихідні та свята", html);
+        Assert.Contains("id='startTimeScopeOptions'", html);
+        Assert.Contains("oninput='renderStartTimeScopeOptions()'", html);
         Assert.True(Count(html, "class='help'") >= 12);
         Assert.DoesNotContain("Today Logs", html);
         Assert.DoesNotContain("Refresh Logs", html);
@@ -89,10 +92,33 @@ public sealed class AdminWebUiValidationTests
                 document.getElementById('favoriteShiftUsers').value = 'Test User';
                 document.getElementById('holidays').value = '2028-02-29';
                 document.getElementById('excludedDates').value = '2026-12-24';
+                document.getElementById('startTimesToSkip').dispatchEvent(new Event('input', { bubbles: true }));
+                document.querySelector("input[data-start-time='22:00']").click();
                 """);
 
             var validPayload = js.ExecuteScript("return buildRulesPayload();");
             Assert.NotNull(validPayload);
+            Assert.Equal(
+                2L,
+                js.ExecuteScript(
+                    "return document.querySelectorAll('#startTimeScopeOptions input[type=checkbox]').length;"));
+            Assert.Equal(
+                "22:00",
+                js.ExecuteScript(
+                    "return buildRulesPayload().startTimesToSkipOnWeekendsAndHolidays.join(',');"));
+
+            js.ExecuteScript("""
+                document.getElementById('startTimesToSkip').value = '22:00';
+                document.getElementById('startTimesToSkip').dispatchEvent(new Event('input', { bubbles: true }));
+                """);
+            Assert.Equal(
+                1L,
+                js.ExecuteScript(
+                    "return document.querySelectorAll('#startTimeScopeOptions input[type=checkbox]').length;"));
+            Assert.Equal(
+                "22:00",
+                js.ExecuteScript(
+                    "return buildRulesPayload().startTimesToSkipOnWeekendsAndHolidays.join(',');"));
 
             AssertValidationFails(
                 js,

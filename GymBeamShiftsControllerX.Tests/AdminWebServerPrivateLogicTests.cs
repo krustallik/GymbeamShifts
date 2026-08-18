@@ -368,6 +368,8 @@ public class AdminWebServerPrivateLogicTests
             {
                 TakeLunch = true,
                 IncludedWeekdays = new List<string> { "Monday" },
+                StartTimesToSkip = new List<string> { "22:00" },
+                StartTimesToSkipOnWeekendsAndHolidays = new List<string> { "22:00" },
                 FavoriteShiftUsers = new List<string> { "Andrea Pavlíková" }
             }
         };
@@ -381,6 +383,7 @@ public class AdminWebServerPrivateLogicTests
         Assert.Equal(24, response.WeekendOrHolidayMinHoursAhead);
         Assert.Equal(6, response.ImportantShiftNotificationCount);
         Assert.Equal(45000, response.ImportantShiftNotificationDelayMilliseconds);
+        Assert.Equal(new[] { "22:00" }, response.StartTimesToSkipOnWeekendsAndHolidays);
         Assert.Equal(new[] { "Andrea Pavlíková" }, response.FavoriteShiftUsers);
     }
 
@@ -424,6 +427,10 @@ public class AdminWebServerPrivateLogicTests
         Assert.Contains("function isValidTime", html);
         Assert.Contains("function isValidDate", html);
         Assert.Contains("function buildRulesPayload", html);
+        Assert.Contains("id='startTimeScopeOptions'", html);
+        Assert.Contains("function renderStartTimeScopeOptions", html);
+        Assert.Contains("startTimesToSkipOnWeekendsAndHolidays", html);
+        Assert.Contains("Також вихідні/свята", html);
         Assert.Contains("id='rulesError'", html);
     }
 

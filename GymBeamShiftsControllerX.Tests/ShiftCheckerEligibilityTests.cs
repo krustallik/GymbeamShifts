@@ -75,6 +75,32 @@ public class ShiftCheckerEligibilityTests
     }
 
     [Fact]
+    public void IsRelevantShift_WeekendAppliesSelectedStartTimeFilter()
+    {
+        var shift = CreateEligibleShift(new DateTime(2026, 6, 20), "18:00");
+
+        Assert.False(InvokeIsRelevant(
+            shift,
+            startTimesToSkip: new List<string> { "18:00" },
+            startTimesToSkipOnWeekendsAndHolidays: new List<string> { "18:00" },
+            includedWeekdays: new HashSet<DayOfWeek>()));
+    }
+
+    [Fact]
+    public void IsRelevantShift_HolidayAppliesSelectedStartTimeFilter()
+    {
+        var holiday = new DateTime(2026, 6, 17);
+        var shift = CreateEligibleShift(holiday, "18:00");
+
+        Assert.False(InvokeIsRelevant(
+            shift,
+            holidays: new HashSet<DateTime> { holiday },
+            startTimesToSkip: new List<string> { "18:00" },
+            startTimesToSkipOnWeekendsAndHolidays: new List<string> { "18:00" },
+            includedWeekdays: new HashSet<DayOfWeek>()));
+    }
+
+    [Fact]
     public void IsRelevantShift_SkipsExcludedDates()
     {
         var date = new DateTime(2026, 6, 19);
@@ -218,6 +244,7 @@ public class ShiftCheckerEligibilityTests
         HashSet<DateTime>? holidays = null,
         HashSet<DateTime>? excludedDates = null,
         List<string>? startTimesToSkip = null,
+        List<string>? startTimesToSkipOnWeekendsAndHolidays = null,
         HashSet<DayOfWeek>? includedWeekdays = null,
         int shiftMinHoursAhead = 1,
         int weekendOrHolidayMinHoursAhead = 28,
@@ -229,6 +256,7 @@ public class ShiftCheckerEligibilityTests
             holidays ?? new HashSet<DateTime>(),
             excludedDates ?? new HashSet<DateTime>(),
             startTimesToSkip ?? new List<string>(),
+            startTimesToSkipOnWeekendsAndHolidays ?? new List<string>(),
             includedWeekdays ?? new HashSet<DayOfWeek> { DayOfWeek.Friday },
             shiftMinHoursAhead,
             weekendOrHolidayMinHoursAhead,

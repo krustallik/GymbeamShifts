@@ -202,6 +202,7 @@ public class AdminWebServerIntegrationTests : IDisposable
         Assert.Equal(28, document.RootElement.GetProperty("weekendOrHolidayMinHoursAhead").GetInt32());
         Assert.Equal(4, document.RootElement.GetProperty("importantShiftNotificationCount").GetInt32());
         Assert.Equal(30000, document.RootElement.GetProperty("importantShiftNotificationDelayMilliseconds").GetInt32());
+        Assert.Empty(document.RootElement.GetProperty("startTimesToSkipOnWeekendsAndHolidays").EnumerateArray());
         Assert.Equal("Andrea Pavlíková", document.RootElement.GetProperty("favoriteShiftUsers")[0].GetString());
     }
 
@@ -219,6 +220,7 @@ public class AdminWebServerIntegrationTests : IDisposable
           "importantShiftNotificationDelayMilliseconds": 45000,
           "includedWeekdays": ["Friday"],
           "startTimesToSkip": ["21:45"],
+          "startTimesToSkipOnWeekendsAndHolidays": ["21:45"],
           "holidays": ["2026-05-08"],
           "excludedDates": ["2026-05-09"],
           "favoriteShiftUsers": ["Lukáš Fialek"]
@@ -240,6 +242,9 @@ public class AdminWebServerIntegrationTests : IDisposable
         Assert.Equal(6, document.RootElement.GetProperty("importantShiftNotificationCount").GetInt32());
         Assert.Equal(45000, document.RootElement.GetProperty("importantShiftNotificationDelayMilliseconds").GetInt32());
         Assert.Equal("Friday", document.RootElement.GetProperty("includedWeekdays")[0].GetString());
+        Assert.Equal(
+            "21:45",
+            document.RootElement.GetProperty("startTimesToSkipOnWeekendsAndHolidays")[0].GetString());
         Assert.Equal("Lukáš Fialek", document.RootElement.GetProperty("favoriteShiftUsers")[0].GetString());
 
         var saved = await File.ReadAllTextAsync(_configPath);
@@ -249,6 +254,10 @@ public class AdminWebServerIntegrationTests : IDisposable
         Assert.Equal(24, savedJson.RootElement.GetProperty("Timing").GetProperty("WeekendOrHolidayMinHoursAhead").GetInt32());
         Assert.Equal(6, savedJson.RootElement.GetProperty("Timing").GetProperty("ImportantShiftNotificationCount").GetInt32());
         Assert.Equal(45000, savedJson.RootElement.GetProperty("Timing").GetProperty("ImportantShiftNotificationDelayMilliseconds").GetInt32());
+        Assert.Equal(
+            "21:45",
+            savedJson.RootElement.GetProperty("ShiftRules")
+                .GetProperty("StartTimesToSkipOnWeekendsAndHolidays")[0].GetString());
         Assert.Equal("Lukáš Fialek", savedJson.RootElement.GetProperty("ShiftRules").GetProperty("FavoriteShiftUsers")[0].GetString());
     }
 

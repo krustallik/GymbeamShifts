@@ -20,6 +20,7 @@ public class ShiftRulesStoreTests
         Assert.False(snapshot.TakeLunch);
         Assert.Contains("Monday", snapshot.IncludedWeekdays);
         Assert.Empty(snapshot.StartTimesToSkip);
+        Assert.Empty(snapshot.StartTimesToSkipOnWeekendsAndHolidays);
         Assert.Empty(snapshot.Holidays);
         Assert.Empty(snapshot.ExcludedDates);
         Assert.Empty(snapshot.FavoriteShiftUsers);
@@ -32,12 +33,15 @@ public class ShiftRulesStoreTests
         {
             TakeLunch = true,
             IncludedWeekdays = new List<string> { "Monday" },
+            StartTimesToSkip = new List<string> { "22:00" },
+            StartTimesToSkipOnWeekendsAndHolidays = new List<string> { "22:00" },
             ExcludedDates = new List<string> { "2026-01-01" },
             FavoriteShiftUsers = new List<string> { "Andrea Pavlíková" }
         });
 
         var firstSnapshot = store.GetSnapshot();
         firstSnapshot.IncludedWeekdays.Add("Friday");
+        firstSnapshot.StartTimesToSkipOnWeekendsAndHolidays.Clear();
         firstSnapshot.ExcludedDates.Clear();
         firstSnapshot.FavoriteShiftUsers.Clear();
 
@@ -45,6 +49,7 @@ public class ShiftRulesStoreTests
 
         Assert.True(secondSnapshot.TakeLunch);
         Assert.Equal(new[] { "Monday" }, secondSnapshot.IncludedWeekdays);
+        Assert.Equal(new[] { "22:00" }, secondSnapshot.StartTimesToSkipOnWeekendsAndHolidays);
         Assert.Equal(new[] { "2026-01-01" }, secondSnapshot.ExcludedDates);
         Assert.Equal(new[] { "Andrea Pavlíková" }, secondSnapshot.FavoriteShiftUsers);
     }
@@ -59,6 +64,7 @@ public class ShiftRulesStoreTests
             TakeLunch = true,
             IncludedWeekdays = new List<string> { "Monday", " monday ", "Friday", "" },
             StartTimesToSkip = new List<string> { "22:00", "22:00", " 21:45 " },
+            StartTimesToSkipOnWeekendsAndHolidays = new List<string> { " 21:45 ", "20:00" },
             Holidays = new List<string> { "2026-05-01", "2026-05-01" },
             ExcludedDates = new List<string> { "2026-04-01", " " },
             FavoriteShiftUsers = new List<string> { "Andrea Pavlíková", " andrea pavlíková ", "Lukáš Fialek" }
@@ -68,6 +74,7 @@ public class ShiftRulesStoreTests
         Assert.True(snapshot.TakeLunch);
         Assert.Equal(new[] { "Monday", "Friday" }, snapshot.IncludedWeekdays);
         Assert.Equal(new[] { "22:00", "21:45" }, snapshot.StartTimesToSkip);
+        Assert.Equal(new[] { "21:45" }, snapshot.StartTimesToSkipOnWeekendsAndHolidays);
         Assert.Equal(new[] { "2026-05-01" }, snapshot.Holidays);
         Assert.Equal(new[] { "2026-04-01" }, snapshot.ExcludedDates);
         Assert.Equal(new[] { "Andrea Pavlíková", "Lukáš Fialek" }, snapshot.FavoriteShiftUsers);
@@ -82,6 +89,7 @@ public class ShiftRulesStoreTests
         {
             IncludedWeekdays = null!,
             StartTimesToSkip = null!,
+            StartTimesToSkipOnWeekendsAndHolidays = null!,
             Holidays = null!,
             ExcludedDates = null!,
             FavoriteShiftUsers = null!
@@ -89,6 +97,7 @@ public class ShiftRulesStoreTests
 
         Assert.Empty(snapshot.IncludedWeekdays);
         Assert.Empty(snapshot.StartTimesToSkip);
+        Assert.Empty(snapshot.StartTimesToSkipOnWeekendsAndHolidays);
         Assert.Empty(snapshot.Holidays);
         Assert.Empty(snapshot.ExcludedDates);
         Assert.Empty(snapshot.FavoriteShiftUsers);
@@ -140,6 +149,7 @@ public class ShiftRulesStoreTests
                 TakeLunch = true,
                 IncludedWeekdays = new List<string> { "Friday" },
                 StartTimesToSkip = new List<string> { "21:45" },
+                StartTimesToSkipOnWeekendsAndHolidays = new List<string> { "21:45" },
                 Holidays = new List<string> { "2026-05-08" },
                 ExcludedDates = new List<string> { "2026-05-09" },
                 FavoriteShiftUsers = new List<string> { "Andrea Pavlíková" }
@@ -153,10 +163,14 @@ public class ShiftRulesStoreTests
             Assert.Contains("\"IncludedWeekdays\": [", updated);
             Assert.Contains("\"Friday\"", updated);
             Assert.Contains("\"21:45\"", updated);
+            using var updatedJson = JsonDocument.Parse(updated);
+            Assert.Equal(
+                "21:45",
+                updatedJson.RootElement.GetProperty("ShiftRules")
+                    .GetProperty("StartTimesToSkipOnWeekendsAndHolidays")[0].GetString());
             Assert.Contains("\"2026-05-08\"", updated);
             Assert.Contains("\"2026-05-09\"", updated);
             Assert.Contains("\"FavoriteShiftUsers\": [", updated);
-            using var updatedJson = JsonDocument.Parse(updated);
             Assert.True(updatedJson.RootElement.GetProperty("ShiftRules").GetProperty("TakeLunch").GetBoolean());
             Assert.Equal(
                 "Andrea Pavlíková",

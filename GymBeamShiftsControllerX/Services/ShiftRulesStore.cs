@@ -25,11 +25,15 @@ namespace GymBeamShiftsControllerX.Services
         {
             lock (_lock)
             {
+                var startTimesToSkip = CleanList(update.StartTimesToSkip);
                 _current = new ShiftRulesSettings
                 {
                     TakeLunch = update.TakeLunch,
                     IncludedWeekdays = CleanList(update.IncludedWeekdays),
-                    StartTimesToSkip = CleanList(update.StartTimesToSkip),
+                    StartTimesToSkip = startTimesToSkip,
+                    StartTimesToSkipOnWeekendsAndHolidays = CleanSubset(
+                        update.StartTimesToSkipOnWeekendsAndHolidays,
+                        startTimesToSkip),
                     Holidays = CleanList(update.Holidays),
                     ExcludedDates = CleanList(update.ExcludedDates),
                     FavoriteShiftUsers = CleanList(update.FavoriteShiftUsers)
@@ -51,6 +55,8 @@ namespace GymBeamShiftsControllerX.Services
                 TakeLunch = source.TakeLunch,
                 IncludedWeekdays = new List<string>(source.IncludedWeekdays ?? new List<string>()),
                 StartTimesToSkip = new List<string>(source.StartTimesToSkip ?? new List<string>()),
+                StartTimesToSkipOnWeekendsAndHolidays = new List<string>(
+                    source.StartTimesToSkipOnWeekendsAndHolidays ?? new List<string>()),
                 Holidays = new List<string>(source.Holidays ?? new List<string>()),
                 ExcludedDates = new List<string>(source.ExcludedDates ?? new List<string>()),
                 FavoriteShiftUsers = new List<string>(source.FavoriteShiftUsers ?? new List<string>())
@@ -77,6 +83,24 @@ namespace GymBeamShiftsControllerX.Services
                 if (set.Add(trimmed))
                 {
                     result.Add(trimmed);
+                }
+            }
+
+            return result;
+        }
+
+        private static List<string> CleanSubset(List<string> source, List<string> allowedValues)
+        {
+            var selectedValues = new HashSet<string>(
+                CleanList(source),
+                System.StringComparer.OrdinalIgnoreCase);
+            var result = new List<string>();
+
+            foreach (var value in allowedValues)
+            {
+                if (selectedValues.Contains(value))
+                {
+                    result.Add(value);
                 }
             }
 

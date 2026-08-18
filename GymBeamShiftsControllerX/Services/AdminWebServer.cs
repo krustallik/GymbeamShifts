@@ -28,6 +28,7 @@ namespace GymBeamShiftsControllerX.Services
         public bool TakeLunch { get; set; } = false;
         public List<string> IncludedWeekdays { get; set; } = new List<string>();
         public List<string> StartTimesToSkip { get; set; } = new List<string>();
+        public List<string> StartTimesToSkipOnWeekendsAndHolidays { get; set; } = new List<string>();
         public List<string> Holidays { get; set; } = new List<string>();
         public List<string> ExcludedDates { get; set; } = new List<string>();
         public List<string> FavoriteShiftUsers { get; set; } = new List<string>();
@@ -42,6 +43,7 @@ namespace GymBeamShiftsControllerX.Services
         public bool TakeLunch { get; set; }
         public List<string> IncludedWeekdays { get; set; } = new List<string>();
         public List<string> StartTimesToSkip { get; set; } = new List<string>();
+        public List<string> StartTimesToSkipOnWeekendsAndHolidays { get; set; } = new List<string>();
         public List<string> Holidays { get; set; } = new List<string>();
         public List<string> ExcludedDates { get; set; } = new List<string>();
         public List<string> FavoriteShiftUsers { get; set; } = new List<string>();
@@ -549,6 +551,7 @@ namespace GymBeamShiftsControllerX.Services
                 TakeLunch = rules.TakeLunch,
                 IncludedWeekdays = rules.IncludedWeekdays,
                 StartTimesToSkip = rules.StartTimesToSkip,
+                StartTimesToSkipOnWeekendsAndHolidays = rules.StartTimesToSkipOnWeekendsAndHolidays,
                 Holidays = rules.Holidays,
                 ExcludedDates = rules.ExcludedDates,
                 FavoriteShiftUsers = rules.FavoriteShiftUsers,
@@ -748,6 +751,15 @@ namespace GymBeamShiftsControllerX.Services
     input, textarea, button { width:100%; box-sizing:border-box; border-radius: 8px; border: 1px solid #374151; background:#0b1220; color:#e5e7eb; padding:10px; }
     input[type='checkbox'] { width:auto; margin-right:8px; }
     .checkbox-label { display:flex; align-items:center; margin:12px 0; }
+    .time-rule-editor { display:grid; grid-template-columns:minmax(140px,.8fr) minmax(220px,1.2fr); gap:10px; align-items:start; }
+    .time-scope-panel { min-height:132px; padding:10px; box-sizing:border-box; border:1px solid #374151; border-radius:8px; background:#111827; }
+    .time-scope-title { margin:0 0 4px; font-size:13px; font-weight:bold; color:#dbeafe; }
+    .time-scope-note,.time-scope-empty { color:#9ca3af; font-size:12px; line-height:1.4; }
+    .time-scope-list { display:grid; gap:7px; margin-top:10px; }
+    .time-scope-row { display:flex; align-items:center; justify-content:space-between; gap:10px; padding:7px 8px; border:1px solid #374151; border-radius:7px; background:#0b1220; }
+    .time-scope-row code { color:#f9fafb; font-weight:bold; }
+    .time-scope-row label { display:flex; align-items:center; gap:6px; margin:0; color:#cbd5e1; font-size:12px; cursor:pointer; }
+    .time-scope-row input { margin:0; }
     button { background: #2563eb; cursor: pointer; margin-top: 10px; }
     button:hover { background:#1d4ed8; }
     .grid { display:grid; gap:16px; grid-template-columns: 1fr 1fr; }
@@ -766,7 +778,7 @@ namespace GymBeamShiftsControllerX.Services
     .validation-overlay { position:absolute; z-index:9999; inset:0; display:flex; align-items:center; justify-content:center; padding:20px; border-radius:inherit; background:#030712f2; backdrop-filter:blur(5px); cursor:wait; }
     .validation-overlay[hidden] { display:none; }.validation-progress { width:min(430px,100%); padding:30px 24px; border:1px solid #3b82f6; border-radius:16px; background:#111827; box-shadow:0 24px 90px #000; text-align:center; }
     .spinner { width:54px; height:54px; margin:0 auto 20px; border:5px solid #374151; border-top-color:#3b82f6; border-radius:50%; animation:spin .8s linear infinite; }.validation-progress h2{margin:0 0 10px}.validation-progress p{margin:0;color:#cbd5e1;line-height:1.5}.validation-progress .wait-note{margin-top:12px;color:#93c5fd;font-size:13px}@keyframes spin{to{transform:rotate(360deg)}}@media(prefers-reduced-motion:reduce){.spinner{animation-duration:1.8s}}
-    @media(max-width:700px){.grid{grid-template-columns:1fr}.container{margin:16px auto}.help::after{left:12px;right:12px;bottom:12px;width:auto;max-height:calc(100vh - 24px);font-size:12px;transform:translateY(8px)}.help:hover::after,.help:focus::after{transform:translateY(0)}}
+    @media(max-width:700px){.grid,.time-rule-editor{grid-template-columns:1fr}.container{margin:16px auto}.help::after{left:12px;right:12px;bottom:12px;width:auto;max-height:calc(100vh - 24px);font-size:12px;transform:translateY(8px)}.help:hover::after,.help:focus::after{transform:translateY(0)}}
   </style>
 </head>
 <body>
@@ -804,8 +816,15 @@ namespace GymBeamShiftsControllerX.Services
           <div>
             <div class='label-row'><label>Дозволені дні тижня, по одному в рядку</label><span class='help' tabindex='0' data-tip='Дні тижня, у які бот може брати зміни. Вводьте англійські назви Monday–Sunday, оскільки їх очікує система GymBeam.'>?</span></div>
             <textarea id='includedWeekdays' rows='6'></textarea>
-            <div class='label-row'><label>Час початку, який треба пропускати</label><span class='help' tabindex='0' data-tip='Бот не братиме зміни, що починаються у вказаний час. Кожне значення вводьте з нового рядка у форматі HH:mm, наприклад 22:00.'>?</span></div>
-            <textarea id='startTimesToSkip' rows='6'></textarea>
+            <div class='label-row'><label>Час початку, який треба пропускати</label><span class='help' tabindex='0' data-tip='Кожне значення вводьте з нового рядка у форматі HH:mm. Для кожного часу праворуч з’явиться чекбокс. Якщо його позначити, цей час блокуватиме зміни також у суботу, неділю та святкові дати. Без позначки фільтр діє лише у звичайні будні.'>?</span></div>
+            <div class='time-rule-editor'>
+              <textarea id='startTimesToSkip' rows='7' oninput='renderStartTimeScopeOptions()' aria-describedby='startTimeScopeHelp'></textarea>
+              <div class='time-scope-panel'>
+                <div class='time-scope-title'>Застосовувати у вихідні та свята</div>
+                <div id='startTimeScopeHelp' class='time-scope-note'>Позначте час, якщо його потрібно пропускати також у суботу, неділю та святкові дати.</div>
+                <div id='startTimeScopeOptions' class='time-scope-list' aria-live='polite'></div>
+              </div>
+            </div>
             <div class='label-row'><label>Пріоритетні працівники, по одному в рядку</label><span class='help' tabindex='0' data-tip='Якщо на одну дату доступно кілька змін, бот спочатку спробує вибрати зміну працівника з цього списку. Вказуйте ім’я так, як воно показане на сайті.'>?</span></div>
             <textarea id='favoriteShiftUsers' rows='6'></textarea>
           </div>
@@ -907,6 +926,50 @@ namespace GymBeamShiftsControllerX.Services
         && date.getUTCDate() === day;
     }
 
+    let startTimesToSkipOnWeekendsAndHolidays = new Set();
+
+    function renderStartTimeScopeOptions() {
+      const times = [...new Set(linesToArray(document.getElementById('startTimesToSkip').value))];
+      const availableTimes = new Set(times);
+      startTimesToSkipOnWeekendsAndHolidays = new Set(
+        [...startTimesToSkipOnWeekendsAndHolidays].filter(value => availableTimes.has(value)));
+
+      const container = document.getElementById('startTimeScopeOptions');
+      container.replaceChildren();
+
+      if (times.length === 0) {
+        const empty = document.createElement('div');
+        empty.className = 'time-scope-empty';
+        empty.textContent = 'Введіть час зліва — тут автоматично з’являться налаштування.';
+        container.appendChild(empty);
+        return;
+      }
+
+      for (const time of times) {
+        const row = document.createElement('div');
+        row.className = 'time-scope-row';
+
+        const timeLabel = document.createElement('code');
+        timeLabel.textContent = time;
+
+        const checkboxLabel = document.createElement('label');
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.checked = startTimesToSkipOnWeekendsAndHolidays.has(time);
+        checkbox.dataset.startTime = time;
+        checkbox.addEventListener('change', () => {
+          if (checkbox.checked) {
+            startTimesToSkipOnWeekendsAndHolidays.add(time);
+          } else {
+            startTimesToSkipOnWeekendsAndHolidays.delete(time);
+          }
+        });
+        checkboxLabel.append(checkbox, document.createTextNode('Також вихідні/свята'));
+        row.append(timeLabel, checkboxLabel);
+        container.appendChild(row);
+      }
+    }
+
     function buildRulesPayload() {
       const allowedWeekdays = new Set([
         'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'
@@ -945,6 +1008,8 @@ namespace GymBeamShiftsControllerX.Services
         importantShiftNotificationDelayMilliseconds: readInteger('importantShiftNotificationDelayMilliseconds', 'Затримка між важливими сповіщеннями', 0, 600000),
         includedWeekdays,
         startTimesToSkip,
+        startTimesToSkipOnWeekendsAndHolidays: startTimesToSkip.filter(
+          value => startTimesToSkipOnWeekendsAndHolidays.has(value)),
         favoriteShiftUsers,
         holidays,
         excludedDates
@@ -987,6 +1052,9 @@ namespace GymBeamShiftsControllerX.Services
       document.getElementById('importantShiftNotificationDelayMilliseconds').value = rules.importantShiftNotificationDelayMilliseconds ?? 30000;
       document.getElementById('includedWeekdays').value = arrayToLines(rules.includedWeekdays);
       document.getElementById('startTimesToSkip').value = arrayToLines(rules.startTimesToSkip);
+      startTimesToSkipOnWeekendsAndHolidays = new Set(
+        rules.startTimesToSkipOnWeekendsAndHolidays ?? []);
+      renderStartTimeScopeOptions();
       document.getElementById('favoriteShiftUsers').value = arrayToLines(rules.favoriteShiftUsers);
       document.getElementById('holidays').value = arrayToLines(rules.holidays);
       document.getElementById('excludedDates').value = arrayToLines(rules.excludedDates);

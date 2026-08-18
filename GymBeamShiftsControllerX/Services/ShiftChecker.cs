@@ -117,6 +117,8 @@ namespace GymBeamShiftsControllerX.Services
                 var holidays = ParseDateSet(rules.Holidays);
                 var excludedDates = ParseDateSet(rules.ExcludedDates);
                 var startTimesToSkip = rules.StartTimesToSkip ?? new List<string>();
+                var startTimesToSkipOnWeekendsAndHolidays =
+                    rules.StartTimesToSkipOnWeekendsAndHolidays ?? new List<string>();
                 var includedWeekdays = ParseWeekdaySet(rules.IncludedWeekdays);
                 var favoriteShiftUserPriorities = ParseFavoriteShiftUserPriorities(rules.FavoriteShiftUsers);
                 bool shiftRegistered = false;
@@ -128,6 +130,7 @@ namespace GymBeamShiftsControllerX.Services
                             holidays,
                             excludedDates,
                             startTimesToSkip,
+                            startTimesToSkipOnWeekendsAndHolidays,
                             includedWeekdays,
                             _config.Timing.ShiftMinHoursAhead,
                             _config.Timing.WeekendOrHolidayMinHoursAhead,
@@ -272,6 +275,7 @@ namespace GymBeamShiftsControllerX.Services
             HashSet<DateTime> holidays,
             HashSet<DateTime> excludedDates,
             IReadOnlyList<string> startTimesToSkip,
+            IReadOnlyList<string> startTimesToSkipOnWeekendsAndHolidays,
             HashSet<DayOfWeek> includedWeekdays,
             int shiftMinHoursAhead,
             int weekendOrHolidayMinHoursAhead,
@@ -287,7 +291,10 @@ namespace GymBeamShiftsControllerX.Services
             bool isIncludedWeekday = includedWeekdays.Contains(dow);
             bool isHoliday = holidays.Contains(shift.Date.Date);
 
-            if (!isWeekend && !isHoliday && startTimesToSkip.Contains(shift.TimeFrom))
+            bool skipTimeApplies = (!isWeekend
+                && !isHoliday)
+                || startTimesToSkipOnWeekendsAndHolidays.Contains(shift.TimeFrom);
+            if (skipTimeApplies && startTimesToSkip.Contains(shift.TimeFrom))
             {
                 return false;
             }

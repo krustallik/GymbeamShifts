@@ -25,6 +25,7 @@
   },
   "ShiftRules": {
     "StartTimesToSkip": ["22:00", "21:45"],
+    "StartTimesToSkipOnWeekendsAndHolidays": [],
     "Holidays": [
       "2026-01-01",
       "2026-01-06",
