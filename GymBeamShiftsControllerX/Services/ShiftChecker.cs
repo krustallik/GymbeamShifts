@@ -14,6 +14,7 @@ namespace GymBeamShiftsControllerX.Services
         private readonly BrowserSession _browserSession;
         private readonly AppConfig _config;
         private readonly ShiftRulesStore _shiftRulesStore;
+        private readonly HashSet<string> _skippedNewWorkerShiftIds = new(StringComparer.Ordinal);
 
         public ShiftChecker(BrowserSession browserSession, AppConfig config, ShiftRulesStore shiftRulesStore)
         {
@@ -109,6 +110,12 @@ namespace GymBeamShiftsControllerX.Services
                         TimeFrom = timeFrom,
                         TimeTo = timeTo,
                         UserId = userId,
+                        ShiftIdentifier = GetShiftIdentifier(
+                            buttonElement,
+                            parsedDate,
+                            timeFrom,
+                            timeTo,
+                            userId),
                         ButtonElement = buttonElement
                     });
                 }
@@ -125,6 +132,11 @@ namespace GymBeamShiftsControllerX.Services
 
                 foreach (var shift in PrioritizeShiftsByFavoriteUsers(shiftList, favoriteShiftUserPriorities))
                 {
+                    if (_skippedNewWorkerShiftIds.Contains(shift.ShiftIdentifier))
+                    {
+                        continue;
+                    }
+
                     if (!IsRelevantShift(
                             shift,
                             holidays,
@@ -145,7 +157,7 @@ namespace GymBeamShiftsControllerX.Services
                         Logger.Log($"Найдена релевантная смена: {message}");
 
                         Logger.Log("Нажимаем кнопку 'Prihlásiť'.");
-                        shift.ButtonElement.Click();
+                        ScrollIntoViewAndClick(driver, wait, shift.ButtonElement!);
                         Logger.Log("Кнопка 'Prihlásiť' нажата.");
 
                         bool subscriptionConfirmed = false;
@@ -161,6 +173,7 @@ namespace GymBeamShiftsControllerX.Services
                                     StringComparison.Ordinal))
                             {
                                 Logger.Log("Смена предназначена для 'Noví brigádnici'. Пропускаем смену.");
+                                _skippedNewWorkerShiftIds.Add(shift.ShiftIdentifier);
                                 CloseSubscribeModal(subscribeModal, wait);
                                 continue;
                             }
@@ -183,7 +196,7 @@ namespace GymBeamShiftsControllerX.Services
                             confirmButton.Click();
                             Logger.Log("Кнопка 'Confirm' нажата.");
 
-                            wait.Until(ExpectedConditions.InvisibilityOfElementLocated(By.Id(AppConstants.SubscribeModalId)));
+                            WaitForSubscribeModalToClose(wait);
                             Logger.Log("Модальное окно закрыто.");
                             SelectAllShiftsPerPage(wait);
                             subscriptionConfirmed = true;
@@ -225,7 +238,80 @@ namespace GymBeamShiftsControllerX.Services
             );
             var dropdown = new SelectElement(selectElement);
             dropdown.SelectByValue("100");
+            wait.Until(webDriver =>
+            {
+                try
+                {
+                    var currentSelect = new SelectElement(
+                        webDriver.FindElement(By.Name(AppConstants.InvitationsTableLengthName))
+                    );
+                    return currentSelect.SelectedOption.GetAttribute("value") == "100";
+                }
+                catch (StaleElementReferenceException)
+                {
+                    return false;
+                }
+            });
+            wait.Until(webDriver =>
+            {
+                foreach (var processingElement in webDriver.FindElements(By.CssSelector(".dataTables_processing")))
+                {
+                    try
+                    {
+                        if (processingElement.Displayed)
+                        {
+                            return false;
+                        }
+                    }
+                    catch (StaleElementReferenceException)
+                    {
+                    }
+                }
+
+                return true;
+            });
             Logger.Log("Выбрано значение 100 в выпадающем меню.");
+        }
+
+        private static string GetShiftIdentifier(
+            IWebElement? buttonElement,
+            DateTime date,
+            string timeFrom,
+            string timeTo,
+            string userId)
+        {
+            string dataId = buttonElement?.GetAttribute("data-id")?.Trim();
+            return !string.IsNullOrWhiteSpace(dataId)
+                ? dataId
+                : $"{date:yyyy-MM-dd}|{timeFrom}|{timeTo}|{userId}";
+        }
+
+        private static void ScrollIntoViewAndClick(
+            IWebDriver driver,
+            WebDriverWait wait,
+            IWebElement buttonElement)
+        {
+            wait.Until(_ =>
+            {
+                ((IJavaScriptExecutor)driver).ExecuteScript(
+                    "arguments[0].scrollIntoView({block: 'center', inline: 'nearest'});",
+                    buttonElement);
+
+                try
+                {
+                    if (!buttonElement.Displayed || !buttonElement.Enabled)
+                    {
+                        return false;
+                    }
+
+                    buttonElement.Click();
+                    return true;
+                }
+                catch (ElementClickInterceptedException)
+                {
+                    return false;
+                }
+            });
         }
 
         private static void CloseSubscribeModal(IWebElement subscribeModal, WebDriverWait wait)
@@ -243,8 +329,31 @@ namespace GymBeamShiftsControllerX.Services
                 subscribeModal.SendKeys(Keys.Escape);
             }
 
-            wait.Until(ExpectedConditions.InvisibilityOfElementLocated(By.Id(AppConstants.SubscribeModalId)));
+            WaitForSubscribeModalToClose(wait);
             Logger.Log("Модальное окно пропущенной смены закрыто.");
+        }
+
+        private static void WaitForSubscribeModalToClose(WebDriverWait wait)
+        {
+            wait.Until(ExpectedConditions.InvisibilityOfElementLocated(By.Id(AppConstants.SubscribeModalId)));
+            wait.Until(webDriver =>
+            {
+                foreach (var backdrop in webDriver.FindElements(By.CssSelector(".modal-backdrop")))
+                {
+                    try
+                    {
+                        if (backdrop.Displayed)
+                        {
+                            return false;
+                        }
+                    }
+                    catch (StaleElementReferenceException)
+                    {
+                    }
+                }
+
+                return true;
+            });
         }
 
         private static bool TryParseShiftStart(ShiftEntry shift, out DateTime shiftStart)

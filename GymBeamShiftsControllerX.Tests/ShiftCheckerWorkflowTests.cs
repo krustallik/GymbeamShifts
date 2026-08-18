@@ -89,6 +89,26 @@ public sealed class ShiftCheckerWorkflowTests : IDisposable
     }
 
     [Fact]
+    public void CheckForShifts_RemembersSkippedNewWorkersShiftAcrossScans()
+    {
+        DateTime shiftDate = GetFutureSaturday();
+        string rows = CreateShiftRow(
+            shiftDate,
+            "22:00",
+            "Noví brigádnici - ranná",
+            "20777755");
+        NavigateToScenario(CreateScenarioHtml(rows));
+        var checker = CreateChecker(takeLunch: false);
+
+        checker.CheckForShifts();
+        checker.CheckForShifts();
+
+        Assert.Equal(
+            "1",
+            _driver.ExecuteScript("return sessionStorage.getItem('subscribeClicks');"));
+    }
+
+    [Fact]
     public void CheckForShifts_SkipsMalformedExcludedAndUnavailableRows()
     {
         DateTime saturday = GetFutureSaturday();
@@ -243,6 +263,8 @@ public sealed class ShiftCheckerWorkflowTests : IDisposable
               <script>
                 let selectedUser = '';
                 function subscribe(user) {
+                  const clickCount = Number(sessionStorage.getItem('subscribeClicks') || '0');
+                  sessionStorage.setItem('subscribeClicks', String(clickCount + 1));
                   selectedUser = user;
                   document.getElementById('shiftTitle').textContent = user;
                   document.getElementById('modal_subscribe').style.display = 'block';
@@ -318,13 +340,18 @@ public sealed class ShiftCheckerWorkflowTests : IDisposable
             """;
     }
 
-    private static string CreateShiftRow(DateTime date, string timeFrom, string user)
+    private static string CreateShiftRow(
+        DateTime date,
+        string timeFrom,
+        string user,
+        string? shiftIdentifier = null)
     {
         string dateText = date.ToString("dd.MM.yyyy", CultureInfo.InvariantCulture);
+        shiftIdentifier ??= $"shift-{date:yyyyMMdd}-{timeFrom.Replace(':', '-')}-{Uri.EscapeDataString(user)}";
         return $$"""
             <tr>
               <td>{{dateText}}</td><td>{{timeFrom}}</td><td>23:30</td><td>{{user}}</td>
-              <td><button class='subscribe_shift' onclick="subscribe('{{user}}')">Join</button></td>
+              <td><button class='subscribe_shift' data-id='{{shiftIdentifier}}' onclick="subscribe('{{user}}')">Join</button></td>
             </tr>
             """;
     }
