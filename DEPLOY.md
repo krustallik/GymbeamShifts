@@ -33,7 +33,7 @@ dig +short bot2.mapa-svietidiel.sk
 
 ## Вимоги до сервера
 
-- Ubuntu з Docker Engine і Docker Compose v2
+- Ubuntu з Docker Engine, Docker Compose v2, `curl` і `python3`
 - відкриті TCP-порти 22, 80, 443
 - бажано щонайменше 4 GB RAM для двох Chromium-процесів
 - репозиторій уже клонований у каталог із `docker-compose.yml`
@@ -149,15 +149,17 @@ Workflow `.github/workflows/ci.yml` виконує:
 `scripts/deploy.sh`:
 
 1. отримує `main` через fast-forward pull;
-2. перевіряє файли та сім обов'язкових змінних кожного бота;
-3. створює timestamped backup обох `.env` і JSON у `backups/`;
+2. перевіряє Docker Compose, Caddy та безпечність runtime-каталогів;
+3. створює timestamped snapshot конфігурації, маршрутів, образів і `docker inspect` усіх managed-ботів;
 4. перевіряє Compose;
 5. один раз збирає спільний образ;
-6. під час першої міграції видаляє старі `gymbeam-shifts-bot` і `gymbeam-nginx`;
-7. послідовно оновлює bot1 і bot2 та чекає стану `healthy`;
-8. запускає Caddy;
-9. перевіряє обидва `/healthz` через HTTPS;
-10. лише після успіху очищає невикористані образи.
+6. знаходить усі bot-контейнери за labels `com.gymbeam.managed=true` і `com.gymbeam.role=bot`;
+7. пересоздає кожен знайдений контейнер зі свіжим `gymbeam-shifts-bot:latest`, зберігаючи labels, environment, bind mounts, network, healthcheck, resource limits, restart policy та попередній running/stopped стан;
+8. для кожного запущеного бота чекає стану `healthy` і перевіряє `/healthz` безпосередньо всередині контейнера;
+9. запускає Caddy;
+10. лише після повного успіху видаляє тимчасові backup-контейнери; при помилці повертає попередні контейнери та image.
+
+Імена ботів не зашиті в deploy-скрипт. Це однаково працює для Compose-сервісів і ботів, створених через Admin Manager, наприклад `bot-ihor` або `bot-andriana`.
 
 ## Перший запуск
 

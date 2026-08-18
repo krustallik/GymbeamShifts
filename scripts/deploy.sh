@@ -5,15 +5,13 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 export ADMIN_MANAGER_PROVISIONING_DOCKER_INSTANCES_PATH="${ROOT_DIR}/instances"
 export DOCKER_SOCKET_GID="${DOCKER_SOCKET_GID:-$(stat -c '%g' /var/run/docker.sock)}"
+. "${ROOT_DIR}/scripts/managed-bot-deploy.sh"
 if [[ ! "$DOCKER_SOCKET_GID" =~ ^[0-9]+$ ]]; then
   echo "ERROR: Docker socket group identifier is invalid." >&2
   exit 2
 fi
 
 BRANCH="${DEPLOY_BRANCH:-main}"
-BOT_INSTANCES=(bot1 bot2)
-BOT_SERVICES=()
-BOT_PUBLIC_HOSTS=()
 DEPLOYMENTS_DIR="${ROOT_DIR}/runtime/deployments"
 DEPLOY_ID="$(date -u +%Y%m%dT%H%M%SZ)-$$"
 SNAPSHOT_DIR="${DEPLOYMENTS_DIR}/${DEPLOY_ID}"
@@ -25,7 +23,8 @@ rollback_on_error() {
   trap - ERR
   if [[ "$ROLLBACK_ARMED" == "1" ]]; then
     echo "ERROR: deployment failed; restoring snapshot ${SNAPSHOT_DIR}."
-    if ! bash scripts/rollback.sh "$SNAPSHOT_DIR"; then
+    restore_managed_bots "$SNAPSHOT_DIR" || true
+    if ! ROLLBACK_SKIP_MANAGED_BOTS=1 bash scripts/rollback.sh "$SNAPSHOT_DIR"; then
       echo "ERROR: automatic rollback failed; snapshot remains at ${SNAPSHOT_DIR}."
     fi
   elif [[ "$MANAGER_STOPPED_BY_DEPLOY" == "1" ]]; then
@@ -34,26 +33,6 @@ rollback_on_error() {
   exit "$exit_code"
 }
 trap rollback_on_error ERR
-
-require_instance_files() {
-  local instance="$1"
-  docker run --rm \
-    -v "${ROOT_DIR}/instances:/instances:ro" \
-    caddy:2-alpine \
-    sh -eu -c '
-      instance="$1"
-      env_path="/instances/${instance}/.env"
-      config_path="/instances/${instance}/appconfig.json"
-      test -s "$env_path" && test -s "$config_path"
-      for key in GYMBEAM_AUTH_LOGIN GYMBEAM_AUTH_PASSWORD GYMBEAM_TELEGRAM_BOT_TOKEN GYMBEAM_TELEGRAM_CHAT_ID GYMBEAM_ADMIN_USER GYMBEAM_ADMIN_PASSWORD GYMBEAM_ADMIN_TOKEN_SECRET; do
-        grep -Eq "^${key}=.+$" "$env_path" || exit 1
-      done
-      test -z "$(find "/instances/${instance}" -type l -print -quit)"
-    ' sh "$instance" || {
-      echo "ERROR: required managed files for ${instance} are invalid."
-      return 1
-    }
-}
 
 wait_for_healthy() {
   local service="$1"
@@ -116,6 +95,7 @@ create_snapshot() {
 
   snapshot_image gymbeam-shifts-bot:latest "gymbeam-shifts-bot:rollback-${DEPLOY_ID}"
   snapshot_image gymbeam-admin-manager:latest "gymbeam-admin-manager:rollback-${DEPLOY_ID}"
+  snapshot_managed_bots "$SNAPSHOT_DIR"
 }
 
 if [[ "${DEPLOY_SKIP_UPDATE:-0}" != "1" ]]; then
@@ -129,22 +109,6 @@ if [[ ! "${DEPLOY_PREVIOUS_COMMIT:-}" =~ ^[0-9a-fA-F]{40}$ ]]; then
   exit 2
 fi
 
-for instance in "${BOT_INSTANCES[@]}"; do
-  instance_path="instances/${instance}"
-  if [[ ! -e "$instance_path" || ! -f "${instance_path}/.env" ]]; then
-    echo "Skipping deleted ${instance}; no managed credentials are present."
-    continue
-  fi
-  if [[ ! -d "$instance_path" ]]; then
-    echo "ERROR: ${instance_path} exists but is not a directory."
-    exit 1
-  fi
-
-  require_instance_files "$instance"
-  mkdir -p "${instance_path}/runtime-data"
-  BOT_SERVICES+=("gymbeam-bot-${instance#bot}")
-  BOT_PUBLIC_HOSTS+=("${instance}.mapa-svietidiel.sk")
-done
 mkdir -p backups
 
 if [[ -L instances || -L runtime/caddy-dynamic || -L runtime/caddy ]]; then
@@ -195,10 +159,7 @@ docker run --rm --user 0 \
   gymbeam-admin-manager:latest \
   -c 'chown app:app /target && chmod 755 /target'
 
-for service in "${BOT_SERVICES[@]}"; do
-  docker compose up -d --no-deps "$service"
-  wait_for_healthy "$service"
-done
+recreate_managed_bots "$SNAPSHOT_DIR" "$DEPLOY_ID"
 
 docker compose up -d --no-deps gymbeam-admin-manager
 wait_for_healthy gymbeam-admin-manager
@@ -209,13 +170,10 @@ docker compose exec -T caddy caddy reload \
   --address unix//run/caddy-admin/admin.sock \
   --config /etc/caddy/Caddyfile
 
-for public_host in "${BOT_PUBLIC_HOSTS[@]}"; do
-  curl --fail --silent --show-error --retry 12 --retry-delay 5 --retry-all-errors \
-    "https://${public_host}/healthz" >/dev/null
-done
 curl --fail --silent --show-error --retry 12 --retry-delay 5 --retry-all-errors \
   "https://${ADMIN_MANAGER_PUBLIC_HOST:-admin.mapa-svietidiel.sk}/healthz" >/dev/null
 
+remove_managed_bot_backups "$SNAPSHOT_DIR"
 ROLLBACK_ARMED=0
 trap - ERR
 printf '%s\n' "succeeded" >"${SNAPSHOT_DIR}/status"

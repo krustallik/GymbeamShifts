@@ -26,6 +26,7 @@ fi
 
 COMPOSE=(docker compose --project-directory "$ROOT_DIR" -f "${SNAPSHOT_DIR}/docker-compose.yml")
 cd "$ROOT_DIR"
+. "${ROOT_DIR}/scripts/managed-bot-deploy.sh"
 export ADMIN_MANAGER_PROVISIONING_DOCKER_INSTANCES_PATH="${ROOT_DIR}/instances"
 export DOCKER_SOCKET_GID="${DOCKER_SOCKET_GID:-$(stat -c '%g' /var/run/docker.sock)}"
 if [[ ! "$DOCKER_SOCKET_GID" =~ ^[0-9]+$ ]]; then
@@ -103,17 +104,30 @@ if docker image inspect "gymbeam-admin-manager:rollback-${DEPLOY_ID}" >/dev/null
   docker image tag "gymbeam-admin-manager:rollback-${DEPLOY_ID}" gymbeam-admin-manager:latest
 fi
 
+if [[ "${ROLLBACK_SKIP_MANAGED_BOTS:-0}" != "1" ]]; then
+  ROLLBACK_BOTS_SNAPSHOT="${SNAPSHOT_DIR}/rollback-managed-bots-$$"
+  snapshot_managed_bots "$ROLLBACK_BOTS_SNAPSHOT"
+  restore_current_bots_on_error() {
+    local exit_code=$?
+    trap - ERR
+    restore_managed_bots "$ROLLBACK_BOTS_SNAPSHOT" || true
+    exit "$exit_code"
+  }
+  trap restore_current_bots_on_error ERR
+  recreate_managed_bots "$ROLLBACK_BOTS_SNAPSHOT" "rollback-${DEPLOY_ID}"
+  remove_managed_bot_backups "$ROLLBACK_BOTS_SNAPSHOT"
+  trap - ERR
+fi
+
 docker run --rm --user 0 \
   -v "${ROOT_DIR}/runtime/caddy-dynamic:/target" \
   --entrypoint /bin/sh \
   gymbeam-admin-manager:latest \
   -c 'chown app:app /target && chmod 755 /target'
 
-for service in gymbeam-bot-1 gymbeam-bot-2 gymbeam-admin-manager; do
-  "${COMPOSE[@]}" up -d --no-deps --force-recreate "$service"
-done
+"${COMPOSE[@]}" up -d --no-deps --force-recreate gymbeam-admin-manager
 "${COMPOSE[@]}" up -d caddy
 
 printf '%s\n' "rolled_back" >"${SNAPSHOT_DIR}/status"
 chmod 600 "${SNAPSHOT_DIR}/status"
-echo "Rollback ${DEPLOY_ID} completed. Runtime-created bot containers were preserved."
+echo "Rollback ${DEPLOY_ID} completed. Managed bot containers now use the rollback image."

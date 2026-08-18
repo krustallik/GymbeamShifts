@@ -117,7 +117,8 @@ public class DeploymentConfigurationTests
         Assert.Contains("Security tests", workflow);
         Assert.Contains("docker compose config --quiet", workflow);
         Assert.Contains("caddy validate --config /etc/caddy/Caddyfile", workflow);
-        Assert.Contains("bash -n scripts/deploy.sh scripts/rollback.sh", workflow);
+        Assert.Contains("scripts/managed-bot-deploy.sh", workflow);
+        Assert.Contains("bash scripts/tests/deploy-managed-bots.sh", workflow);
         Assert.Contains("actions/checkout@11d5960a326750d5838078e36cf38b85af677262", workflow);
         Assert.Contains("actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9", workflow);
         Assert.Contains("appleboy/ssh-action@7eaf76671a0d7eec5d98ee897acda4f968735a17", workflow);
@@ -135,6 +136,9 @@ public class DeploymentConfigurationTests
         Assert.DoesNotContain("--remove-orphans", deploy, StringComparison.Ordinal);
         Assert.DoesNotContain("docker compose down", deploy, StringComparison.Ordinal);
         Assert.Contains("docker compose build gymbeam-bot-1 gymbeam-admin-manager", deploy);
+        Assert.Contains("snapshot_managed_bots", deploy);
+        Assert.Contains("recreate_managed_bots", deploy);
+        Assert.Contains("remove_managed_bot_backups", deploy);
         Assert.Contains("runtime/deployments", deploy);
         Assert.Contains("admin-manager-data.tar", deploy);
         Assert.Contains("caddy-routes.tar", deploy);
@@ -150,21 +154,24 @@ public class DeploymentConfigurationTests
     }
 
     [Fact]
-    public void Deploy_SkipsPermanentlyDeletedBotInstances()
+    public void Deploy_DiscoversAndRecreatesEveryManagedBotByLabels()
     {
         string deploy = ReadRootFile(Path.Combine("scripts", "deploy.sh"));
-        string compose = ReadRootFile("docker-compose.yml");
-        string caddyService = compose[compose.IndexOf("  caddy:", StringComparison.Ordinal)..];
+        string helper = ReadRootFile(Path.Combine("scripts", "managed-bot-deploy.sh"));
+        string deploymentTest = ReadRootFile(Path.Combine("scripts", "tests", "deploy-managed-bots.sh"));
 
-        Assert.Contains("if [[ ! -e \"$instance_path\" || ! -f \"${instance_path}/.env\" ]]", deploy);
-        Assert.Contains("Skipping deleted ${instance}", deploy);
-        Assert.Contains("BOT_SERVICES+=(\"gymbeam-bot-${instance#bot}\")", deploy);
-        Assert.Contains("for public_host in \"${BOT_PUBLIC_HOSTS[@]}\"", deploy);
-        Assert.DoesNotContain("https://bot1.mapa-svietidiel.sk/healthz", deploy);
-        Assert.DoesNotContain("https://bot2.mapa-svietidiel.sk/healthz", deploy);
-        Assert.DoesNotContain("gymbeam-bot-1:", caddyService);
-        Assert.DoesNotContain("gymbeam-bot-2:", caddyService);
-        Assert.Contains("gymbeam-admin-manager:", caddyService);
+        Assert.DoesNotContain("BOT_INSTANCES=(bot1 bot2)", deploy);
+        Assert.Contains("--filter label=com.gymbeam.managed=true", helper);
+        Assert.Contains("--filter label=com.gymbeam.role=bot", helper);
+        Assert.Contains("gymbeam-shifts-bot:latest", helper);
+        Assert.Contains("docker inspect", helper);
+        Assert.Contains("docker rename", helper);
+        Assert.Contains("docker exec \"$name\" curl --fail", helper);
+        Assert.Contains("wait_for_managed_bot_healthy", helper);
+        Assert.Contains("bot-ihor", deploymentTest);
+        Assert.Contains("bot-andriana", deploymentTest);
+        Assert.Contains("IHOR_NEW_ID", deploymentTest);
+        Assert.Contains("ANDRIANA_NEW_ID", deploymentTest);
     }
 
     [Fact]

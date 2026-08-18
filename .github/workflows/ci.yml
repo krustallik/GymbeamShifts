@@ -72,10 +72,15 @@ jobs:
         run: docker compose config --quiet
 
       - name: Validate deployment scripts
-        run: bash -n scripts/deploy.sh scripts/rollback.sh
+        run: |
+          bash -n scripts/deploy.sh scripts/rollback.sh scripts/managed-bot-deploy.sh scripts/tests/deploy-managed-bots.sh
+          python3 -m py_compile scripts/build-managed-bot-payload.py
 
       - name: Build Docker images
         run: docker compose build gymbeam-bot-1 gymbeam-admin-manager
+
+      - name: Test dynamic managed bot deployment
+        run: bash scripts/tests/deploy-managed-bots.sh
 
       - name: Validate Caddy configuration
         run: |
