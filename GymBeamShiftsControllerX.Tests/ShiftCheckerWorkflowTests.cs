@@ -198,27 +198,34 @@ public sealed class ShiftCheckerWorkflowTests : IDisposable
     {
         DateTime shiftDate = GetFutureSaturday();
         string dateText = shiftDate.ToString("dd.MM.yyyy", CultureInfo.InvariantCulture);
-        string rows = $"<tr><td>{dateText}</td><td>08:00</td><td>16:00</td><td>Target User</td><td></td></tr>";
+        string rows =
+            $"<tr><td>{dateText}</td><td>08:00</td><td>16:00</td><td>Target User</td><td></td></tr>" +
+            $"<tr><td>{dateText}</td><td>09:30</td><td>17:30</td><td>Second Target</td><td></td></tr>";
         string scenario = CreateScenarioHtml(rows);
         var messages = new List<string>();
         NavigateToScenario(scenario);
         var checker = CreateChecker(
             takeLunch: false,
-            targetShiftDateTime: $"{shiftDate:yyyy-MM-dd}T08:00",
+            targetShiftDateTimes: new List<string>
+            {
+                $"{shiftDate:yyyy-MM-dd}T08:00",
+                $"{shiftDate:yyyy-MM-dd}T09:30"
+            },
             sendTelegramMessage: messages.Add);
 
         checker.CheckForShifts();
         NavigateToScenario(scenario);
         checker.CheckForShifts();
 
-        Assert.Equal(2, messages.Count);
+        Assert.Equal(4, messages.Count);
         Assert.All(messages, message =>
         {
             Assert.Contains("Знайдено вибрану зміну", message);
             Assert.Contains($"Дата: {shiftDate:dd.MM.yyyy}", message);
-            Assert.Contains("Час: 08:00-16:00", message);
             Assert.Contains("немає кнопки «Prihlásiť»", message);
         });
+        Assert.Equal(2, messages.Count(message => message.Contains("Час: 08:00-16:00")));
+        Assert.Equal(2, messages.Count(message => message.Contains("Час: 09:30-17:30")));
     }
 
     [Fact]
@@ -230,7 +237,7 @@ public sealed class ShiftCheckerWorkflowTests : IDisposable
         NavigateToScenario(CreateScenarioHtml(rows));
         var checker = CreateChecker(
             takeLunch: false,
-            targetShiftDateTime: $"{shiftDate:yyyy-MM-dd}T08:00",
+            targetShiftDateTimes: new List<string> { $"{shiftDate:yyyy-MM-dd}T08:00" },
             sendTelegramMessage: messages.Add);
 
         checker.CheckForShifts();
@@ -248,7 +255,7 @@ public sealed class ShiftCheckerWorkflowTests : IDisposable
         NavigateToScenario(CreateScenarioHtml(rows));
         var checker = CreateChecker(
             takeLunch: false,
-            targetShiftDateTime: $"{shiftDate:yyyy-MM-dd}T09:00",
+            targetShiftDateTimes: new List<string> { $"{shiftDate:yyyy-MM-dd}T09:00" },
             sendTelegramMessage: messages.Add);
 
         checker.CheckForShifts();
@@ -285,7 +292,7 @@ public sealed class ShiftCheckerWorkflowTests : IDisposable
         List<string>? excludedDates = null,
         List<string>? holidays = null,
         List<string>? includedWeekdays = null,
-        string targetShiftDateTime = "",
+        List<string>? targetShiftDateTimes = null,
         int importantShiftNotificationCount = 0,
         Action<string>? sendTelegramMessage = null)
     {
@@ -308,7 +315,7 @@ public sealed class ShiftCheckerWorkflowTests : IDisposable
                 ExcludedDates = excludedDates ?? new List<string>(),
                 Holidays = holidays ?? new List<string>(),
                 IncludedWeekdays = includedWeekdays ?? new List<string>(),
-                TargetShiftDateTime = targetShiftDateTime
+                TargetShiftDateTimes = targetShiftDateTimes ?? new List<string>()
             }
         };
 

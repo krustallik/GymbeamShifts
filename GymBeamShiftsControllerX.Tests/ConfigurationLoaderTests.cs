@@ -331,7 +331,11 @@ BADLINE
                 {
                     IncludedWeekdays = new List<string> { "Friday" },
                     FavoriteShiftUsers = new List<string> { "Andrea Pavlíková" },
-                    TargetShiftDateTime = "2026-08-25T08:00"
+                    TargetShiftDateTimes = new List<string>
+                    {
+                        "2026-08-25T08:00",
+                        "2026-08-26T09:30"
+                    }
                 }
             };
 
@@ -350,7 +354,7 @@ BADLINE
   "ShiftRules": {
     "IncludedWeekdays": ["Friday"],
     "FavoriteShiftUsers": ["Andrea Pavlíková"],
-    "TargetShiftDateTime": "2026-08-25T08:00"
+    "TargetShiftDateTimes": ["2026-08-25T08:00", "2026-08-26T09:30"]
   }
 }
 """);
@@ -360,7 +364,7 @@ BADLINE
 
             Assert.Equal(original.ShiftRules.IncludedWeekdays, loaded.ShiftRules.IncludedWeekdays);
             Assert.Equal(original.ShiftRules.FavoriteShiftUsers, loaded.ShiftRules.FavoriteShiftUsers);
-            Assert.Equal(original.ShiftRules.TargetShiftDateTime, loaded.ShiftRules.TargetShiftDateTime);
+            Assert.Equal(original.ShiftRules.TargetShiftDateTimes, loaded.ShiftRules.TargetShiftDateTimes);
             Assert.Equal(original.Auth.LoginUrl, loaded.Auth.LoginUrl);
         }
         finally

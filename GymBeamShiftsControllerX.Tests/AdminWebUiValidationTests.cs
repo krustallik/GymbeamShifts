@@ -19,7 +19,7 @@ public sealed class AdminWebUiValidationTests
         Assert.Contains("Правила вибору змін", html);
         Assert.Contains("Мінімум годин до початку зміни", html);
         Assert.Contains("Пріоритетні працівники", html);
-        Assert.Contains("Дата й час вибраної зміни", html);
+        Assert.Contains("Дати й час вибраних змін", html);
         Assert.Contains("Застосовувати у вихідні та свята", html);
         Assert.DoesNotContain("class='time-scope-title'", html);
         Assert.DoesNotContain("id='startTimeScopeHelp'", html);
@@ -92,7 +92,7 @@ public sealed class AdminWebUiValidationTests
                 document.getElementById('weekendOrHolidayMinHoursAhead').value = '28';
                 document.getElementById('importantShiftNotificationCount').value = '4';
                 document.getElementById('importantShiftNotificationDelayMilliseconds').value = '30000';
-                document.getElementById('targetShiftDateTime').value = '2026-08-25T08:00';
+                document.getElementById('targetShiftDateTimes').value = '2026-08-25 08:00\n2026-08-26 09:30';
                 document.getElementById('includedWeekdays').value = 'Monday\nFriday';
                 document.getElementById('startTimesToSkip').value = '22:00\n21:45';
                 document.getElementById('favoriteShiftUsers').value = 'Test User';
@@ -105,8 +105,8 @@ public sealed class AdminWebUiValidationTests
             var validPayload = js.ExecuteScript("return buildRulesPayload();");
             Assert.NotNull(validPayload);
             Assert.Equal(
-                "2026-08-25T08:00",
-                js.ExecuteScript("return buildRulesPayload().targetShiftDateTime;"));
+                "2026-08-25T08:00,2026-08-26T09:30",
+                js.ExecuteScript("return buildRulesPayload().targetShiftDateTimes.join(',');"));
             Assert.Equal(
                 2L,
                 js.ExecuteScript(
@@ -155,9 +155,9 @@ public sealed class AdminWebUiValidationTests
 
             AssertValidationFails(
                 js,
-                "document.getElementById('targetShiftDateTime').type = 'text'; document.getElementById('targetShiftDateTime').value = 'not-a-date'; return buildRulesPayload();",
-                "Дата й час вибраної зміни");
-            js.ExecuteScript("document.getElementById('targetShiftDateTime').value = ''; document.getElementById('targetShiftDateTime').type = 'datetime-local';");
+                "document.getElementById('targetShiftDateTimes').value = 'not-a-date'; return buildRulesPayload();",
+                "Дати й час вибраних змін");
+            js.ExecuteScript("document.getElementById('targetShiftDateTimes').value = '';");
 
             js.ExecuteScript(
                 "document.getElementById('favoriteShiftUsers').value = arguments[0];",

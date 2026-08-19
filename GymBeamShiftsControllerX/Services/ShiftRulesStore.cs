@@ -39,7 +39,7 @@ namespace GymBeamShiftsControllerX.Services
                     Holidays = CleanList(update.Holidays),
                     ExcludedDates = CleanList(update.ExcludedDates),
                     FavoriteShiftUsers = CleanList(update.FavoriteShiftUsers),
-                    TargetShiftDateTime = CleanTargetShiftDateTime(update.TargetShiftDateTime)
+                    TargetShiftDateTimes = CleanTargetShiftDateTimes(update.TargetShiftDateTimes)
                 };
 
                 return Clone(_current);
@@ -53,6 +53,13 @@ namespace GymBeamShiftsControllerX.Services
                 return new ShiftRulesSettings();
             }
 
+            var targetShiftDateTimes = new List<string>(
+                source.TargetShiftDateTimes ?? new List<string>());
+            if (!string.IsNullOrWhiteSpace(source.TargetShiftDateTime))
+            {
+                targetShiftDateTimes.Add(source.TargetShiftDateTime);
+            }
+
             return new ShiftRulesSettings
             {
                 TakeLunch = source.TakeLunch,
@@ -63,7 +70,7 @@ namespace GymBeamShiftsControllerX.Services
                 Holidays = new List<string>(source.Holidays ?? new List<string>()),
                 ExcludedDates = new List<string>(source.ExcludedDates ?? new List<string>()),
                 FavoriteShiftUsers = new List<string>(source.FavoriteShiftUsers ?? new List<string>()),
-                TargetShiftDateTime = source.TargetShiftDateTime ?? string.Empty
+                TargetShiftDateTimes = CleanTargetShiftDateTimes(targetShiftDateTimes)
             };
         }
 
@@ -111,21 +118,35 @@ namespace GymBeamShiftsControllerX.Services
             return result;
         }
 
-        private static string CleanTargetShiftDateTime(string value)
+        private static List<string> CleanTargetShiftDateTimes(IEnumerable<string> values)
         {
-            if (string.IsNullOrWhiteSpace(value))
+            var result = new List<string>();
+            var seen = new HashSet<string>(StringComparer.Ordinal);
+            if (values == null)
             {
-                return string.Empty;
+                return result;
             }
 
-            return DateTime.TryParseExact(
-                value.Trim(),
-                "yyyy-MM-dd'T'HH:mm",
-                CultureInfo.InvariantCulture,
-                DateTimeStyles.None,
-                out DateTime parsed)
-                ? parsed.ToString("yyyy-MM-dd'T'HH:mm", CultureInfo.InvariantCulture)
-                : string.Empty;
+            foreach (string value in values)
+            {
+                if (!DateTime.TryParseExact(
+                        value?.Trim(),
+                        "yyyy-MM-dd'T'HH:mm",
+                        CultureInfo.InvariantCulture,
+                        DateTimeStyles.None,
+                        out DateTime parsed))
+                {
+                    continue;
+                }
+
+                string normalized = parsed.ToString("yyyy-MM-dd'T'HH:mm", CultureInfo.InvariantCulture);
+                if (seen.Add(normalized))
+                {
+                    result.Add(normalized);
+                }
+            }
+
+            return result;
         }
     }
 }

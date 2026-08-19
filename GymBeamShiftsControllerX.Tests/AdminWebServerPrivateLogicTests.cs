@@ -371,7 +371,11 @@ public class AdminWebServerPrivateLogicTests
                 StartTimesToSkip = new List<string> { "22:00" },
                 StartTimesToSkipOnWeekendsAndHolidays = new List<string> { "22:00" },
                 FavoriteShiftUsers = new List<string> { "Andrea Pavlíková" },
-                TargetShiftDateTime = "2026-08-25T08:00"
+                TargetShiftDateTimes = new List<string>
+                {
+                    "2026-08-25T08:00",
+                    "2026-08-26T09:30"
+                }
             }
         };
         var store = new ShiftRulesStore(cfg.ShiftRules);
@@ -386,7 +390,9 @@ public class AdminWebServerPrivateLogicTests
         Assert.Equal(45000, response.ImportantShiftNotificationDelayMilliseconds);
         Assert.Equal(new[] { "22:00" }, response.StartTimesToSkipOnWeekendsAndHolidays);
         Assert.Equal(new[] { "Andrea Pavlíková" }, response.FavoriteShiftUsers);
-        Assert.Equal("2026-08-25T08:00", response.TargetShiftDateTime);
+        Assert.Equal(
+            new[] { "2026-08-25T08:00", "2026-08-26T09:30" },
+            response.TargetShiftDateTimes);
     }
 
     [Fact]
@@ -428,9 +434,9 @@ public class AdminWebServerPrivateLogicTests
         Assert.Contains("function readInteger", html);
         Assert.Contains("function isValidTime", html);
         Assert.Contains("function isValidDate", html);
-        Assert.Contains("function readOptionalDateTimeLocal", html);
+        Assert.Contains("function normalizeTargetShiftDateTime", html);
         Assert.Contains("function buildRulesPayload", html);
-        Assert.Contains("id='targetShiftDateTime'", html);
+        Assert.Contains("id='targetShiftDateTimes'", html);
         Assert.Contains("id='startTimeScopeOptions'", html);
         Assert.Contains("function renderStartTimeScopeOptions", html);
         Assert.Contains("startTimesToSkipOnWeekendsAndHolidays", html);

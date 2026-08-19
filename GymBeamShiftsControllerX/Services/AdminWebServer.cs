@@ -32,7 +32,7 @@ namespace GymBeamShiftsControllerX.Services
         public List<string> Holidays { get; set; } = new List<string>();
         public List<string> ExcludedDates { get; set; } = new List<string>();
         public List<string> FavoriteShiftUsers { get; set; } = new List<string>();
-        public string TargetShiftDateTime { get; set; } = string.Empty;
+        public List<string> TargetShiftDateTimes { get; set; } = new List<string>();
         public int ShiftMinHoursAhead { get; set; } = 48;
         public int WeekendOrHolidayMinHoursAhead { get; set; } = 28;
         public int ImportantShiftNotificationCount { get; set; } = 4;
@@ -48,7 +48,7 @@ namespace GymBeamShiftsControllerX.Services
         public List<string> Holidays { get; set; } = new List<string>();
         public List<string> ExcludedDates { get; set; } = new List<string>();
         public List<string> FavoriteShiftUsers { get; set; } = new List<string>();
-        public string TargetShiftDateTime { get; set; } = string.Empty;
+        public List<string> TargetShiftDateTimes { get; set; } = new List<string>();
         public int ShiftMinHoursAhead { get; set; }
         public int WeekendOrHolidayMinHoursAhead { get; set; }
         public int ImportantShiftNotificationCount { get; set; }
@@ -364,11 +364,11 @@ namespace GymBeamShiftsControllerX.Services
                     return;
                 }
 
-                if (!IsValidTargetShiftDateTime(update.TargetShiftDateTime))
+                if (!AreValidTargetShiftDateTimes(update.TargetShiftDateTimes))
                 {
                     WriteJson(context.Response, 400, new
                     {
-                        error = "Дата й час вибраної зміни мають бути у форматі РРРР-ММ-ДД ГГ:ХХ."
+                        error = "Дати й час вибраних змін мають бути у форматі РРРР-ММ-ДД ГГ:ХХ."
                     });
                     return;
                 }
@@ -566,7 +566,7 @@ namespace GymBeamShiftsControllerX.Services
                 Holidays = rules.Holidays,
                 ExcludedDates = rules.ExcludedDates,
                 FavoriteShiftUsers = rules.FavoriteShiftUsers,
-                TargetShiftDateTime = rules.TargetShiftDateTime,
+                TargetShiftDateTimes = rules.TargetShiftDateTimes,
                 ShiftMinHoursAhead = _config.Timing.ShiftMinHoursAhead,
                 WeekendOrHolidayMinHoursAhead = _config.Timing.WeekendOrHolidayMinHoursAhead,
                 ImportantShiftNotificationCount = _config.Timing.ImportantShiftNotificationCount,
@@ -579,15 +579,19 @@ namespace GymBeamShiftsControllerX.Services
             return Math.Min(Math.Max(value, 1), 720);
         }
 
-        private static bool IsValidTargetShiftDateTime(string value)
+        private static bool AreValidTargetShiftDateTimes(List<string> values)
         {
-            return string.IsNullOrWhiteSpace(value)
-                || DateTime.TryParseExact(
-                    value.Trim(),
+            if (values == null)
+            {
+                return true;
+            }
+
+            return values.All(value => DateTime.TryParseExact(
+                    value?.Trim(),
                     "yyyy-MM-dd'T'HH:mm",
                     System.Globalization.CultureInfo.InvariantCulture,
                     System.Globalization.DateTimeStyles.None,
-                    out _);
+                    out _));
         }
 
         private static int NormalizeImportantShiftNotificationCount(int value)
@@ -835,8 +839,8 @@ namespace GymBeamShiftsControllerX.Services
         <input id='importantShiftNotificationCount' type='number' min='1' max='20' step='1' required />
         <div class='label-row'><label>Затримка між важливими сповіщеннями, мс</label><span class='help' tabindex='0' data-tip='Пауза в мілісекундах між повторними Telegram-сповіщеннями про важливу зміну. 1000 мс дорівнює 1 секунді. Від 0 до 600000.'>?</span></div>
         <input id='importantShiftNotificationDelayMilliseconds' type='number' min='0' max='600000' step='1000' required />
-        <div class='label-row'><label>Дата й час вибраної зміни</label><span class='help' tabindex='0' data-tip='Необов’язкове поле. Виберіть дату та точний час початку зміни, яку очікуєте. Якщо бот побачить цю зміну без кнопки «Prihlásiť», він повідомлятиме про неї в Telegram на кожній ітерації перевірки. Очистьте поле, щоб вимкнути такі сповіщення.'>?</span></div>
-        <input id='targetShiftDateTime' type='datetime-local' step='60' />
+        <div class='label-row'><label>Дати й час вибраних змін, по одній у рядку</label><span class='help' tabindex='0' data-tip='Необов’язковий список. Введіть дату та точний час початку кожної зміни у форматі РРРР-ММ-ДД ГГ:ХХ, по одному значенню в рядку. Якщо бот побачить будь-яку з цих змін без кнопки «Prihlásiť», він повідомлятиме про неї в Telegram на кожній ітерації перевірки. Очистьте список, щоб вимкнути такі сповіщення.'>?</span></div>
+        <textarea id='targetShiftDateTimes' rows='5' placeholder='2026-08-22 06:00'></textarea>
         <div class='grid'>
           <div>
             <div class='label-row'><label>Дозволені дні тижня, по одному в рядку</label><span class='help' tabindex='0' data-tip='Дні тижня, у які бот може брати зміни. Вводьте англійські назви Monday–Sunday, оскільки їх очікує система GymBeam.'>?</span></div>
@@ -950,18 +954,12 @@ namespace GymBeamShiftsControllerX.Services
         && date.getUTCDate() === day;
     }
 
-    function readOptionalDateTimeLocal(id, label) {
-      const value = document.getElementById(id).value.trim();
-      if (!value) {
-        return '';
-      }
-
-      const parts = value.split('T');
-      if (parts.length !== 2 || !isValidDate(parts[0]) || !isValidTime(parts[1])) {
-        throw new Error(`${label}: виберіть правильну дату й час.`);
-      }
-
-      return value;
+    function normalizeTargetShiftDateTime(value) {
+      const normalized = value.trim().replace(/\s+/, 'T');
+      const parts = normalized.split('T');
+      return parts.length === 2 && isValidDate(parts[0]) && isValidTime(parts[1])
+        ? normalized
+        : null;
     }
 
     let startTimesToSkipOnWeekendsAndHolidays = new Set();
@@ -1037,6 +1035,12 @@ namespace GymBeamShiftsControllerX.Services
         'Виключені дати',
         isValidDate,
         'реальна дата у форматі РРРР-ММ-ДД');
+      const targetShiftDateTimes = validateList(
+        linesToArray(document.getElementById('targetShiftDateTimes').value),
+        'Дати й час вибраних змін',
+        value => normalizeTargetShiftDateTime(value) !== null,
+        'реальна дата й час у форматі РРРР-ММ-ДД ГГ:ХХ')
+        .map(normalizeTargetShiftDateTime);
 
       return {
         takeLunch: document.getElementById('takeLunch').checked,
@@ -1044,7 +1048,7 @@ namespace GymBeamShiftsControllerX.Services
         weekendOrHolidayMinHoursAhead: readInteger('weekendOrHolidayMinHoursAhead', 'Мінімум годин для вихідних і свят', 1, 720),
         importantShiftNotificationCount: readInteger('importantShiftNotificationCount', 'Кількість сповіщень про важливу зміну', 1, 20),
         importantShiftNotificationDelayMilliseconds: readInteger('importantShiftNotificationDelayMilliseconds', 'Затримка між важливими сповіщеннями', 0, 600000),
-        targetShiftDateTime: readOptionalDateTimeLocal('targetShiftDateTime', 'Дата й час вибраної зміни'),
+        targetShiftDateTimes,
         includedWeekdays,
         startTimesToSkip,
         startTimesToSkipOnWeekendsAndHolidays: startTimesToSkip.filter(
@@ -1089,7 +1093,8 @@ namespace GymBeamShiftsControllerX.Services
       document.getElementById('weekendOrHolidayMinHoursAhead').value = rules.weekendOrHolidayMinHoursAhead ?? 28;
       document.getElementById('importantShiftNotificationCount').value = rules.importantShiftNotificationCount ?? 4;
       document.getElementById('importantShiftNotificationDelayMilliseconds').value = rules.importantShiftNotificationDelayMilliseconds ?? 30000;
-      document.getElementById('targetShiftDateTime').value = rules.targetShiftDateTime ?? '';
+      document.getElementById('targetShiftDateTimes').value = arrayToLines(
+        (rules.targetShiftDateTimes ?? []).map(value => value.replace('T', ' ')));
       document.getElementById('includedWeekdays').value = arrayToLines(rules.includedWeekdays);
       document.getElementById('startTimesToSkip').value = arrayToLines(rules.startTimesToSkip);
       startTimesToSkipOnWeekendsAndHolidays = new Set(

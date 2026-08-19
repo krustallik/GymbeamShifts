@@ -35,7 +35,7 @@ namespace GymBeamShiftsControllerX.Services
 
         public void CheckForShifts()
         {
-            bool targetShiftUnavailableNotificationSent = false;
+            var notifiedUnavailableTargetStarts = new HashSet<DateTime>();
 
             while (true)
             {
@@ -142,11 +142,10 @@ namespace GymBeamShiftsControllerX.Services
                 var favoriteShiftUserPriorities = ParseFavoriteShiftUserPriorities(rules.FavoriteShiftUsers);
                 bool shiftRegistered = false;
 
-                if (!targetShiftUnavailableNotificationSent
-                    && TryNotifyAboutUnavailableTargetShift(shiftList, rules.TargetShiftDateTime))
-                {
-                    targetShiftUnavailableNotificationSent = true;
-                }
+                NotifyAboutUnavailableTargetShifts(
+                    shiftList,
+                    rules.TargetShiftDateTimes,
+                    notifiedUnavailableTargetStarts);
 
                 foreach (var shift in PrioritizeShiftsByFavoriteUsers(shiftList, favoriteShiftUserPriorities))
                 {
@@ -453,25 +452,32 @@ namespace GymBeamShiftsControllerX.Services
                 || holidays.Contains(shift.Date.Date);
         }
 
-        private bool TryNotifyAboutUnavailableTargetShift(
+        private int NotifyAboutUnavailableTargetShifts(
             IReadOnlyList<ShiftEntry> shifts,
-            string targetShiftDateTime)
+            IReadOnlyList<string> targetShiftDateTimes,
+            HashSet<DateTime> notifiedTargetStarts)
         {
-            if (!DateTime.TryParseExact(
-                    targetShiftDateTime,
-                    "yyyy-MM-dd'T'HH:mm",
-                    CultureInfo.InvariantCulture,
-                    DateTimeStyles.None,
-                    out DateTime targetStart))
+            var targetStarts = new HashSet<DateTime>();
+            foreach (string value in targetShiftDateTimes ?? Array.Empty<string>())
             {
-                return false;
+                if (DateTime.TryParseExact(
+                        value,
+                        "yyyy-MM-dd'T'HH:mm",
+                        CultureInfo.InvariantCulture,
+                        DateTimeStyles.None,
+                        out DateTime targetStart))
+                {
+                    targetStarts.Add(targetStart);
+                }
             }
 
+            int notificationCount = 0;
             foreach (var shift in shifts)
             {
                 if (shift.ButtonElement != null
                     || !TryParseShiftStart(shift, out DateTime shiftStart)
-                    || shiftStart != targetStart)
+                    || !targetStarts.Contains(shiftStart)
+                    || !notifiedTargetStarts.Add(shiftStart))
                 {
                     continue;
                 }
@@ -480,10 +486,10 @@ namespace GymBeamShiftsControllerX.Services
                 Logger.Log(
                     $"Відправлено повідомлення про вибрану зміну без кнопки Prihlásiť: "
                     + $"{shift.Date:dd.MM.yyyy} {shift.TimeFrom}-{shift.TimeTo}.");
-                return true;
+                notificationCount++;
             }
 
-            return false;
+            return notificationCount;
         }
 
         private static string BuildUnavailableTargetShiftMessage(ShiftEntry shift)

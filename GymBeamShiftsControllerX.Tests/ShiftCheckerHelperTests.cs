@@ -254,7 +254,7 @@ public class ShiftCheckerHelperTests
     }
 
     [Fact]
-    public void TryNotifyAboutUnavailableTargetShift_SendsUkrainianMessageForExactMissingButton()
+    public void NotifyAboutUnavailableTargetShifts_SendsMessageForEachExactMissingButton()
     {
         var messages = new List<string>();
         var config = new AppConfig();
@@ -265,7 +265,7 @@ public class ShiftCheckerHelperTests
             messages.Add);
         var method = ReflectionTestHelper.GetInstanceMethod(
             typeof(ShiftChecker),
-            "TryNotifyAboutUnavailableTargetShift");
+            "NotifyAboutUnavailableTargetShifts");
         var shifts = new List<ShiftEntry>
         {
             new()
@@ -275,23 +275,35 @@ public class ShiftCheckerHelperTests
                 TimeTo = "16:00",
                 UserId = "Target User",
                 ButtonElement = null
+            },
+            new()
+            {
+                Date = new DateTime(2026, 8, 26),
+                TimeFrom = "09:30",
+                TimeTo = "17:30",
+                UserId = "Second Target",
+                ButtonElement = null
             }
         };
 
-        bool result = (bool)method.Invoke(
+        int result = (int)method.Invoke(
             checker,
-            new object[] { shifts, "2026-08-25T08:00" })!;
+            new object[]
+            {
+                shifts,
+                new List<string> { "2026-08-25T08:00", "2026-08-26T09:30" },
+                new HashSet<DateTime>()
+            })!;
 
-        Assert.True(result);
-        string message = Assert.Single(messages);
-        Assert.Contains("Знайдено вибрану зміну", message);
-        Assert.Contains("Дата: 25.08.2026", message);
-        Assert.Contains("Час: 08:00-16:00", message);
-        Assert.Contains("немає кнопки «Prihlásiť»", message);
+        Assert.Equal(2, result);
+        Assert.Equal(2, messages.Count);
+        Assert.Contains(messages, message => message.Contains("Час: 08:00-16:00"));
+        Assert.Contains(messages, message => message.Contains("Час: 09:30-17:30"));
+        Assert.All(messages, message => Assert.Contains("немає кнопки «Prihlásiť»", message));
     }
 
     [Fact]
-    public void TryNotifyAboutUnavailableTargetShift_RequiresExactDateTimeAndMissingButton()
+    public void NotifyAboutUnavailableTargetShifts_RequiresExactDateTimeAndMissingButton()
     {
         var messages = new List<string>();
         var config = new AppConfig();
@@ -302,7 +314,7 @@ public class ShiftCheckerHelperTests
             messages.Add);
         var method = ReflectionTestHelper.GetInstanceMethod(
             typeof(ShiftChecker),
-            "TryNotifyAboutUnavailableTargetShift");
+            "NotifyAboutUnavailableTargetShifts");
         var shifts = new List<ShiftEntry>
         {
             new()
@@ -315,16 +327,26 @@ public class ShiftCheckerHelperTests
             }
         };
 
-        bool withButton = (bool)method.Invoke(
+        int withButton = (int)method.Invoke(
             checker,
-            new object[] { shifts, "2026-08-25T08:00" })!;
+            new object[]
+            {
+                shifts,
+                new List<string> { "2026-08-25T08:00" },
+                new HashSet<DateTime>()
+            })!;
         shifts[0].ButtonElement = null;
-        bool wrongTime = (bool)method.Invoke(
+        int wrongTime = (int)method.Invoke(
             checker,
-            new object[] { shifts, "2026-08-25T09:00" })!;
+            new object[]
+            {
+                shifts,
+                new List<string> { "2026-08-25T09:00" },
+                new HashSet<DateTime>()
+            })!;
 
-        Assert.False(withButton);
-        Assert.False(wrongTime);
+        Assert.Equal(0, withButton);
+        Assert.Equal(0, wrongTime);
         Assert.Empty(messages);
     }
 

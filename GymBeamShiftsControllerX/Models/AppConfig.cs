@@ -52,6 +52,10 @@ namespace GymBeamShiftsControllerX.Models
         public List<string> ExcludedDates { get; set; } = new List<string>();
         public List<string> IncludedWeekdays { get; set; } = new List<string> { "Monday", "Friday" };
         public List<string> FavoriteShiftUsers { get; set; } = new List<string>();
-        public string TargetShiftDateTime { get; set; } = string.Empty;
+        public List<string> TargetShiftDateTimes { get; set; } = new List<string>();
+
+        [System.Text.Json.Serialization.JsonIgnore(
+            Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+        public string? TargetShiftDateTime { get; set; }
     }
 }
