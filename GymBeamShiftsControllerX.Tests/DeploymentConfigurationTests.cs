@@ -22,6 +22,7 @@ public class DeploymentConfigurationTests
         Assert.Contains("./instances/bot2/appconfig.json:/app/appconfig.json", compose);
         Assert.Contains("./instances/bot1/runtime-data:/app/runtime-data", compose);
         Assert.Contains("./instances/bot2/runtime-data:/app/runtime-data", compose);
+        Assert.Contains("mem_limit: 768m", compose);
         Assert.DoesNotContain("8080:8080", compose);
     }
 
@@ -132,12 +133,15 @@ public class DeploymentConfigurationTests
     {
         string deploy = ReadRootFile(Path.Combine("scripts", "deploy.sh"));
         string rollback = ReadRootFile(Path.Combine("scripts", "rollback.sh"));
+        string payloadBuilder = ReadRootFile(Path.Combine("scripts", "build-managed-bot-payload.py"));
 
         Assert.DoesNotContain("--remove-orphans", deploy, StringComparison.Ordinal);
         Assert.DoesNotContain("docker compose down", deploy, StringComparison.Ordinal);
         Assert.Contains("docker compose build gymbeam-bot-1 gymbeam-admin-manager", deploy);
         Assert.Contains("snapshot_managed_bots", deploy);
         Assert.Contains("recreate_managed_bots", deploy);
+        Assert.Contains("MANAGED_BOT_MEMORY_BYTES = 768 * 1024 * 1024", payloadBuilder);
+        Assert.Contains("host_config[\"Memory\"] = MANAGED_BOT_MEMORY_BYTES", payloadBuilder);
         Assert.Contains("remove_managed_bot_backups", deploy);
         Assert.Contains("runtime/deployments", deploy);
         Assert.Contains("admin-manager-data.tar", deploy);

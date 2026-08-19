@@ -6,6 +6,9 @@ import pathlib
 import sys
 
 
+MANAGED_BOT_MEMORY_BYTES = 768 * 1024 * 1024
+
+
 def main() -> int:
     if len(sys.argv) != 4:
         print(
@@ -47,8 +50,11 @@ def main() -> int:
             key: value for key, value in preserved.items() if value is not None
         }
 
+    host_config = dict(container["HostConfig"])
+    host_config["Memory"] = MANAGED_BOT_MEMORY_BYTES
+
     payload = config
-    payload["HostConfig"] = container["HostConfig"]
+    payload["HostConfig"] = host_config
     payload["NetworkingConfig"] = {"EndpointsConfig": endpoints}
     payload_path.write_text(
         json.dumps(payload, separators=(",", ":")),

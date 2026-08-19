@@ -12,6 +12,7 @@ https://bot2.mapa-svietidiel.sk -> gymbeam-bot-2:8080
 Кожен бот має власні `.env`, `appconfig.json`, лог, GymBeam-акаунт,
 Telegram-параметри й адміністратора. Caddy автоматично отримує та поновлює
 HTTPS-сертифікати. Додаткова Basic Auth перед адмінкою не використовується.
+Кожен bot-контейнер має ліміт оперативної пам'яті 768 MiB.
 
 ## DNS
 
@@ -154,12 +155,47 @@ Workflow `.github/workflows/ci.yml` виконує:
 4. перевіряє Compose;
 5. один раз збирає спільний образ;
 6. знаходить усі bot-контейнери за labels `com.gymbeam.managed=true` і `com.gymbeam.role=bot`;
-7. пересоздає кожен знайдений контейнер зі свіжим `gymbeam-shifts-bot:latest`, зберігаючи labels, environment, bind mounts, network, healthcheck, resource limits, restart policy та попередній running/stopped стан;
+7. пересоздає кожен знайдений контейнер зі свіжим `gymbeam-shifts-bot:latest`, зберігаючи labels, environment, bind mounts, network, healthcheck, restart policy та попередній running/stopped стан, а ліміт RAM нормалізує до 768 MiB;
 8. для кожного запущеного бота чекає стану `healthy` і перевіряє `/healthz` безпосередньо всередині контейнера;
 9. запускає Caddy;
 10. лише після повного успіху видаляє тимчасові backup-контейнери; при помилці повертає попередні контейнери та image.
 
 Імена ботів не зашиті в deploy-скрипт. Це однаково працює для Compose-сервісів і ботів, створених через Admin Manager, наприклад `bot-ihor` або `bot-andriana`.
+
+## Оновлення ліміту RAM на вже створених ботах
+
+Після push у `main` GitHub Actions запускає `scripts/deploy.sh`. Deploy знаходить
+усі контейнери з labels `com.gymbeam.managed=true` і `com.gymbeam.role=bot`,
+створює безпечний snapshot, а потім пересоздає їх із лімітом 768 MiB. Це
+стосується як `gymbeam-bot-1` і `gymbeam-bot-2`, так і ботів, створених через
+Admin Manager. Простого `docker restart` недостатньо, оскільки він не змінює
+HostConfig контейнера.
+
+Після успішного deploy перевір ліміти на сервері:
+
+```bash
+docker ps -aq \
+  --filter label=com.gymbeam.managed=true \
+  --filter label=com.gymbeam.role=bot \
+  | xargs -r docker inspect \
+      --format '{{.Name}} RAM={{.HostConfig.Memory}}'
+```
+
+Для кожного бота очікується `RAM=805306368`. Якщо автоматичний workflow не
+запускався, виконай той самий безпечний deploy вручну:
+
+```bash
+cd /шлях/із/секрету/DEPLOY_PATH
+bash scripts/deploy.sh
+```
+
+Для термінової зміни одного контейнера без повного deploy можна використати:
+
+```bash
+docker update --memory 768m ІМ'Я_КОНТЕЙНЕРА
+```
+
+Наступний штатний deploy однаково закріпить для нього 768 MiB.
 
 ## Перший запуск
 

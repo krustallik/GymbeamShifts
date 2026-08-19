@@ -20,7 +20,7 @@ x-bot-common: &bot-common
   expose:
     - "8080"
   shm_size: "256mb"
-  mem_limit: 512m
+  mem_limit: 768m
   logging: *default-logging
   healthcheck:
     test: ["CMD-SHELL", "curl --fail --silent --show-error http://localhost:8080/healthz > /dev/null || exit 1"]

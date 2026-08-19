@@ -35,7 +35,7 @@ public sealed class SafeDockerProvisionerTests
         Assert.Equal("bot3", root.GetProperty("Labels").GetProperty("com.gymbeam.bot-id").GetString());
         Assert.Equal("bot", root.GetProperty("Labels").GetProperty("com.gymbeam.role").GetString());
         Assert.Equal("gymbeam-bot-bot3", root.GetProperty("Labels").GetProperty("com.docker.compose.service").GetString());
-        Assert.Equal(536870912, root.GetProperty("HostConfig").GetProperty("Memory").GetInt64());
+        Assert.Equal(805306368, root.GetProperty("HostConfig").GetProperty("Memory").GetInt64());
         Assert.Equal(268435456, root.GetProperty("HostConfig").GetProperty("ShmSize").GetInt64());
         Assert.Equal("gymbeam-internal", root.GetProperty("HostConfig").GetProperty("NetworkMode").GetString());
         JsonElement logConfig = root.GetProperty("HostConfig").GetProperty("LogConfig");
