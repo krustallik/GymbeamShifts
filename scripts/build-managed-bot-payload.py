@@ -7,6 +7,7 @@ import sys
 
 
 MANAGED_BOT_MEMORY_BYTES = 768 * 1024 * 1024
+MANAGED_BOT_MEMORY_SWAP_BYTES = 1536 * 1024 * 1024
 
 
 def main() -> int:
@@ -52,6 +53,7 @@ def main() -> int:
 
     host_config = dict(container["HostConfig"])
     host_config["Memory"] = MANAGED_BOT_MEMORY_BYTES
+    host_config["MemorySwap"] = MANAGED_BOT_MEMORY_SWAP_BYTES
 
     payload = config
     payload["HostConfig"] = host_config

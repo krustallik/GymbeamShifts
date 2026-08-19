@@ -21,6 +21,7 @@ x-bot-common: &bot-common
     - "8080"
   shm_size: "256mb"
   mem_limit: 768m
+  memswap_limit: 1536m
   logging: *default-logging
   healthcheck:
     test: ["CMD-SHELL", "curl --fail --silent --show-error http://localhost:8080/healthz > /dev/null || exit 1"]

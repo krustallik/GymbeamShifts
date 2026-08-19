@@ -91,6 +91,7 @@ ANDRIANA_NEW_ID="$(docker inspect --format '{{.Id}}' "$ANDRIANA_CONTAINER")"
 [[ "$(docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "$IHOR_CONTAINER")" == *"PRESERVED_ENV=preserved-value"* ]]
 [[ "$(docker inspect --format '{{index .Config.Labels "com.gymbeam.bot-id"}}' "$IHOR_CONTAINER")" == "bot-ihor" ]]
 [[ "$(docker inspect --format '{{.HostConfig.Memory}}' "$IHOR_CONTAINER")" == "805306368" ]]
+[[ "$(docker inspect --format '{{.HostConfig.MemorySwap}}' "$IHOR_CONTAINER")" == "1610612736" ]]
 [[ "$(docker inspect --format '{{.HostConfig.ShmSize}}' "$IHOR_CONTAINER")" == "33554432" ]]
 [[ "$(docker inspect --format '{{.HostConfig.RestartPolicy.Name}}' "$IHOR_CONTAINER")" == "unless-stopped" ]]
 [[ "$(docker inspect --format '{{.HostConfig.NetworkMode}}' "$IHOR_CONTAINER")" == "$NETWORK_NAME" ]]

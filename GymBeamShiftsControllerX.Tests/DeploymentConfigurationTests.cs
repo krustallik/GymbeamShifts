@@ -23,6 +23,7 @@ public class DeploymentConfigurationTests
         Assert.Contains("./instances/bot1/runtime-data:/app/runtime-data", compose);
         Assert.Contains("./instances/bot2/runtime-data:/app/runtime-data", compose);
         Assert.Contains("mem_limit: 768m", compose);
+        Assert.Contains("memswap_limit: 1536m", compose);
         Assert.DoesNotContain("8080:8080", compose);
     }
 
@@ -141,7 +142,9 @@ public class DeploymentConfigurationTests
         Assert.Contains("snapshot_managed_bots", deploy);
         Assert.Contains("recreate_managed_bots", deploy);
         Assert.Contains("MANAGED_BOT_MEMORY_BYTES = 768 * 1024 * 1024", payloadBuilder);
+        Assert.Contains("MANAGED_BOT_MEMORY_SWAP_BYTES = 1536 * 1024 * 1024", payloadBuilder);
         Assert.Contains("host_config[\"Memory\"] = MANAGED_BOT_MEMORY_BYTES", payloadBuilder);
+        Assert.Contains("host_config[\"MemorySwap\"] = MANAGED_BOT_MEMORY_SWAP_BYTES", payloadBuilder);
         Assert.Contains("remove_managed_bot_backups", deploy);
         Assert.Contains("runtime/deployments", deploy);
         Assert.Contains("admin-manager-data.tar", deploy);

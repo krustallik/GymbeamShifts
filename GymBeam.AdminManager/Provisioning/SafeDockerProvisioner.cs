@@ -15,6 +15,7 @@ public sealed class SafeDockerProvisioner(
 {
     private const int MaximumResponseBytes = 1024 * 1024;
     private const long RequiredMemoryBytes = 768L * 1024 * 1024;
+    private const long RequiredMemorySwapBytes = 1536L * 1024 * 1024;
     private static readonly string ManagedListPath =
         "/containers/json?all=true&filters=%7B%22label%22%3A%5B%22com.gymbeam.managed%3Dtrue%22%5D%7D";
 
@@ -77,6 +78,7 @@ public sealed class SafeDockerProvisioner(
                     $"{hostPath}/runtime-data:/app/runtime-data"
                 },
                 Memory = RequiredMemoryBytes,
+                MemorySwap = RequiredMemorySwapBytes,
                 ShmSize = 256L * 1024 * 1024,
                 NetworkMode = network,
                 Init = true,
