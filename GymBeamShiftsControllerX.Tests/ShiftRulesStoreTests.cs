@@ -24,6 +24,7 @@ public class ShiftRulesStoreTests
         Assert.Empty(snapshot.Holidays);
         Assert.Empty(snapshot.ExcludedDates);
         Assert.Empty(snapshot.FavoriteShiftUsers);
+        Assert.Empty(snapshot.TargetShiftDateTime);
     }
 
     [Fact]
@@ -36,7 +37,8 @@ public class ShiftRulesStoreTests
             StartTimesToSkip = new List<string> { "22:00" },
             StartTimesToSkipOnWeekendsAndHolidays = new List<string> { "22:00" },
             ExcludedDates = new List<string> { "2026-01-01" },
-            FavoriteShiftUsers = new List<string> { "Andrea Pavlíková" }
+            FavoriteShiftUsers = new List<string> { "Andrea Pavlíková" },
+            TargetShiftDateTime = "2026-08-25T08:00"
         });
 
         var firstSnapshot = store.GetSnapshot();
@@ -52,6 +54,7 @@ public class ShiftRulesStoreTests
         Assert.Equal(new[] { "22:00" }, secondSnapshot.StartTimesToSkipOnWeekendsAndHolidays);
         Assert.Equal(new[] { "2026-01-01" }, secondSnapshot.ExcludedDates);
         Assert.Equal(new[] { "Andrea Pavlíková" }, secondSnapshot.FavoriteShiftUsers);
+        Assert.Equal("2026-08-25T08:00", secondSnapshot.TargetShiftDateTime);
     }
 
     [Fact]
@@ -67,7 +70,8 @@ public class ShiftRulesStoreTests
             StartTimesToSkipOnWeekendsAndHolidays = new List<string> { " 21:45 ", "20:00" },
             Holidays = new List<string> { "2026-05-01", "2026-05-01" },
             ExcludedDates = new List<string> { "2026-04-01", " " },
-            FavoriteShiftUsers = new List<string> { "Andrea Pavlíková", " andrea pavlíková ", "Lukáš Fialek" }
+            FavoriteShiftUsers = new List<string> { "Andrea Pavlíková", " andrea pavlíková ", "Lukáš Fialek" },
+            TargetShiftDateTime = " 2026-08-25T08:00 "
         });
 
         var snapshot = store.GetSnapshot();
@@ -78,6 +82,7 @@ public class ShiftRulesStoreTests
         Assert.Equal(new[] { "2026-05-01" }, snapshot.Holidays);
         Assert.Equal(new[] { "2026-04-01" }, snapshot.ExcludedDates);
         Assert.Equal(new[] { "Andrea Pavlíková", "Lukáš Fialek" }, snapshot.FavoriteShiftUsers);
+        Assert.Equal("2026-08-25T08:00", snapshot.TargetShiftDateTime);
     }
 
     [Fact]
@@ -92,7 +97,8 @@ public class ShiftRulesStoreTests
             StartTimesToSkipOnWeekendsAndHolidays = null!,
             Holidays = null!,
             ExcludedDates = null!,
-            FavoriteShiftUsers = null!
+            FavoriteShiftUsers = null!,
+            TargetShiftDateTime = null!
         });
 
         Assert.Empty(snapshot.IncludedWeekdays);
@@ -101,6 +107,7 @@ public class ShiftRulesStoreTests
         Assert.Empty(snapshot.Holidays);
         Assert.Empty(snapshot.ExcludedDates);
         Assert.Empty(snapshot.FavoriteShiftUsers);
+        Assert.Empty(snapshot.TargetShiftDateTime);
     }
 
     [Fact]
@@ -152,7 +159,8 @@ public class ShiftRulesStoreTests
                 StartTimesToSkipOnWeekendsAndHolidays = new List<string> { "21:45" },
                 Holidays = new List<string> { "2026-05-08" },
                 ExcludedDates = new List<string> { "2026-05-09" },
-                FavoriteShiftUsers = new List<string> { "Andrea Pavlíková" }
+                FavoriteShiftUsers = new List<string> { "Andrea Pavlíková" },
+                TargetShiftDateTime = "2026-08-25T08:00"
             });
 
             string updated = System.IO.File.ReadAllText(path);
@@ -175,6 +183,9 @@ public class ShiftRulesStoreTests
             Assert.Equal(
                 "Andrea Pavlíková",
                 updatedJson.RootElement.GetProperty("ShiftRules").GetProperty("FavoriteShiftUsers")[0].GetString());
+            Assert.Equal(
+                "2026-08-25T08:00",
+                updatedJson.RootElement.GetProperty("ShiftRules").GetProperty("TargetShiftDateTime").GetString());
         }
         finally
         {

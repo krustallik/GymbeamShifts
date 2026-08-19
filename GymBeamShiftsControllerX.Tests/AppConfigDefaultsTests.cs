@@ -22,5 +22,6 @@ public class AppConfigDefaultsTests
         Assert.Contains("Monday", cfg.ShiftRules.IncludedWeekdays);
         Assert.Contains("Friday", cfg.ShiftRules.IncludedWeekdays);
         Assert.Empty(cfg.ShiftRules.FavoriteShiftUsers);
+        Assert.Empty(cfg.ShiftRules.TargetShiftDateTime);
     }
 }

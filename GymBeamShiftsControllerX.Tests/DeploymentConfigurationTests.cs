@@ -119,8 +119,8 @@ public class DeploymentConfigurationTests
         Assert.Contains("caddy validate --config /etc/caddy/Caddyfile", workflow);
         Assert.Contains("scripts/managed-bot-deploy.sh", workflow);
         Assert.Contains("bash scripts/tests/deploy-managed-bots.sh", workflow);
-        Assert.Contains("actions/checkout@11d5960a326750d5838078e36cf38b85af677262", workflow);
-        Assert.Contains("actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9", workflow);
+        Assert.Contains("actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09", workflow);
+        Assert.Contains("actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1", workflow);
         Assert.Contains("appleboy/ssh-action@7eaf76671a0d7eec5d98ee897acda4f968735a17", workflow);
         Assert.Contains("permissions:\n  contents: read", workflow.Replace("\r\n", "\n", StringComparison.Ordinal));
         Assert.DoesNotContain("GYMBEAM_AUTH_PASSWORD", workflow, StringComparison.Ordinal);

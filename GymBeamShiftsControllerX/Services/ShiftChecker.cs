@@ -14,17 +14,29 @@ namespace GymBeamShiftsControllerX.Services
         private readonly BrowserSession _browserSession;
         private readonly AppConfig _config;
         private readonly ShiftRulesStore _shiftRulesStore;
+        private readonly Action<string> _sendTelegramMessage;
         private readonly HashSet<string> _skippedNewWorkerShiftIds = new(StringComparer.Ordinal);
 
-        public ShiftChecker(BrowserSession browserSession, AppConfig config, ShiftRulesStore shiftRulesStore)
+        public ShiftChecker(
+            BrowserSession browserSession,
+            AppConfig config,
+            ShiftRulesStore shiftRulesStore,
+            Action<string>? sendTelegramMessage = null)
         {
             _browserSession = browserSession;
             _config = config;
             _shiftRulesStore = shiftRulesStore;
+            _sendTelegramMessage = sendTelegramMessage
+                ?? (message => TelegramService.SendMessage(
+                    _config.Telegram.BotToken,
+                    _config.Telegram.ChatId,
+                    message));
         }
 
         public void CheckForShifts()
         {
+            bool targetShiftUnavailableNotificationSent = false;
+
             while (true)
             {
                 var driver = _browserSession.Driver;
@@ -95,7 +107,7 @@ namespace GymBeamShiftsControllerX.Services
                     string timeTo = cells[2].Text.Trim();
                     string userId = cells[3].Text.Trim();
 
-                    IWebElement buttonElement = null;
+                    IWebElement? buttonElement = null;
                     try
                     {
                         buttonElement = cells[4].FindElement(By.CssSelector(AppConstants.SubscribeButtonSelector));
@@ -130,6 +142,12 @@ namespace GymBeamShiftsControllerX.Services
                 var favoriteShiftUserPriorities = ParseFavoriteShiftUserPriorities(rules.FavoriteShiftUsers);
                 bool shiftRegistered = false;
 
+                if (!targetShiftUnavailableNotificationSent
+                    && TryNotifyAboutUnavailableTargetShift(shiftList, rules.TargetShiftDateTime))
+                {
+                    targetShiftUnavailableNotificationSent = true;
+                }
+
                 foreach (var shift in PrioritizeShiftsByFavoriteUsers(shiftList, favoriteShiftUserPriorities))
                 {
                     if (_skippedNewWorkerShiftIds.Contains(shift.ShiftIdentifier))
@@ -153,8 +171,10 @@ namespace GymBeamShiftsControllerX.Services
 
                     {
                         bool isWeekendOrHoliday = IsWeekendOrHoliday(shift, holidays);
-                        string message = $"Shift found: {shift.Date:dd.MM.yyyy} {shift.TimeFrom}-{shift.TimeTo}, User: {shift.UserId}";
-                        Logger.Log($"Найдена релевантная смена: {message}");
+                        string message = BuildSuccessfulShiftMessage(shift);
+                        Logger.Log(
+                            $"Найдена релевантная смена: {shift.Date:dd.MM.yyyy} "
+                            + $"{shift.TimeFrom}-{shift.TimeTo}, User: {shift.UserId}");
 
                         Logger.Log("Нажимаем кнопку 'Prihlásiť'.");
                         ScrollIntoViewAndClick(driver, wait, shift.ButtonElement!);
@@ -280,7 +300,7 @@ namespace GymBeamShiftsControllerX.Services
             string timeTo,
             string userId)
         {
-            string dataId = buttonElement?.GetAttribute("data-id")?.Trim();
+            string? dataId = buttonElement?.GetAttribute("data-id")?.Trim();
             return !string.IsNullOrWhiteSpace(dataId)
                 ? dataId
                 : $"{date:yyyy-MM-dd}|{timeFrom}|{timeTo}|{userId}";
@@ -433,6 +453,60 @@ namespace GymBeamShiftsControllerX.Services
                 || holidays.Contains(shift.Date.Date);
         }
 
+        private bool TryNotifyAboutUnavailableTargetShift(
+            IReadOnlyList<ShiftEntry> shifts,
+            string targetShiftDateTime)
+        {
+            if (!DateTime.TryParseExact(
+                    targetShiftDateTime,
+                    "yyyy-MM-dd'T'HH:mm",
+                    CultureInfo.InvariantCulture,
+                    DateTimeStyles.None,
+                    out DateTime targetStart))
+            {
+                return false;
+            }
+
+            foreach (var shift in shifts)
+            {
+                if (shift.ButtonElement != null
+                    || !TryParseShiftStart(shift, out DateTime shiftStart)
+                    || shiftStart != targetStart)
+                {
+                    continue;
+                }
+
+                _sendTelegramMessage(BuildUnavailableTargetShiftMessage(shift));
+                Logger.Log(
+                    $"Відправлено повідомлення про вибрану зміну без кнопки Prihlásiť: "
+                    + $"{shift.Date:dd.MM.yyyy} {shift.TimeFrom}-{shift.TimeTo}.");
+                return true;
+            }
+
+            return false;
+        }
+
+        private static string BuildUnavailableTargetShiftMessage(ShiftEntry shift)
+        {
+            return
+                "⚠️ Знайдено вибрану зміну\n\n" +
+                "Зміна, яку ви шукаєте, з’явилася:\n" +
+                $"Дата: {shift.Date:dd.MM.yyyy}\n" +
+                $"Час: {shift.TimeFrom}-{shift.TimeTo}\n" +
+                $"Працівник: {shift.UserId}\n\n" +
+                "Бот не може самостійно обрати цю зміну, оскільки для неї немає кнопки «Prihlásiť». " +
+                "Перевірте зміну та спробуйте записатися вручну.";
+        }
+
+        private static string BuildSuccessfulShiftMessage(ShiftEntry shift)
+        {
+            return
+                "✅ Зміну знайдено та успішно обрано\n\n" +
+                $"Дата: {shift.Date:dd.MM.yyyy}\n" +
+                $"Час: {shift.TimeFrom}-{shift.TimeTo}\n" +
+                $"Працівник: {shift.UserId}";
+        }
+
         private void SendShiftNotifications(string message, bool isWeekendOrHoliday)
         {
             int notificationCount = isWeekendOrHoliday
@@ -441,7 +515,7 @@ namespace GymBeamShiftsControllerX.Services
 
             for (int notificationNumber = 1; notificationNumber <= notificationCount; notificationNumber++)
             {
-                TelegramService.SendMessage(_config.Telegram.BotToken, _config.Telegram.ChatId, message);
+                _sendTelegramMessage(message);
                 Logger.Log($"Сообщение {notificationNumber}/{notificationCount} отправлено в Telegram.");
 
                 if (notificationNumber < notificationCount)

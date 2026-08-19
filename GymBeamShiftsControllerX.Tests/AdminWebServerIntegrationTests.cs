@@ -223,7 +223,8 @@ public class AdminWebServerIntegrationTests : IDisposable
           "startTimesToSkipOnWeekendsAndHolidays": ["21:45"],
           "holidays": ["2026-05-08"],
           "excludedDates": ["2026-05-09"],
-          "favoriteShiftUsers": ["Lukáš Fialek"]
+          "favoriteShiftUsers": ["Lukáš Fialek"],
+          "targetShiftDateTime": "2026-08-25T08:00"
         }
         """;
         var response = await _client.PutAsync(
@@ -246,6 +247,7 @@ public class AdminWebServerIntegrationTests : IDisposable
             "21:45",
             document.RootElement.GetProperty("startTimesToSkipOnWeekendsAndHolidays")[0].GetString());
         Assert.Equal("Lukáš Fialek", document.RootElement.GetProperty("favoriteShiftUsers")[0].GetString());
+        Assert.Equal("2026-08-25T08:00", document.RootElement.GetProperty("targetShiftDateTime").GetString());
 
         var saved = await File.ReadAllTextAsync(_configPath);
         using var savedJson = JsonDocument.Parse(saved);
@@ -259,6 +261,9 @@ public class AdminWebServerIntegrationTests : IDisposable
             savedJson.RootElement.GetProperty("ShiftRules")
                 .GetProperty("StartTimesToSkipOnWeekendsAndHolidays")[0].GetString());
         Assert.Equal("Lukáš Fialek", savedJson.RootElement.GetProperty("ShiftRules").GetProperty("FavoriteShiftUsers")[0].GetString());
+        Assert.Equal(
+            "2026-08-25T08:00",
+            savedJson.RootElement.GetProperty("ShiftRules").GetProperty("TargetShiftDateTime").GetString());
     }
 
     [Fact]
@@ -271,6 +276,25 @@ public class AdminWebServerIntegrationTests : IDisposable
             new StringContent("null", Encoding.UTF8, "application/json"));
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task ShiftRules_PutWithInvalidTargetShiftDateTime_Returns400()
+    {
+        await LoginAsync("testadmin", "testpass");
+
+        var response = await _client.PutAsync(
+            "/api/shift-rules",
+            new StringContent(
+                "{\"targetShiftDateTime\":\"2026-02-30T08:00\"}",
+                Encoding.UTF8,
+                "application/json"));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        using var errorJson = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Contains(
+            "Дата й час вибраної зміни",
+            errorJson.RootElement.GetProperty("error").GetString());
     }
 
     [Fact]

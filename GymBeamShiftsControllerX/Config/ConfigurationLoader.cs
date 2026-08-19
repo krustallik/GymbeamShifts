@@ -20,7 +20,7 @@ namespace GymBeamShiftsControllerX.Config
 
             string configPath = FindConfigPath(fileName);
             string json = File.ReadAllText(configPath);
-            AppConfig config = JsonSerializer.Deserialize<AppConfig>(json, SerializerOptions);
+            AppConfig? config = JsonSerializer.Deserialize<AppConfig>(json, SerializerOptions);
 
             if (config == null)
             {
@@ -279,7 +279,7 @@ namespace GymBeamShiftsControllerX.Config
 
         private static string FindConfigPath(string fileName)
         {
-            DirectoryInfo currentDirectory = new DirectoryInfo(AppContext.BaseDirectory);
+            DirectoryInfo? currentDirectory = new DirectoryInfo(AppContext.BaseDirectory);
 
             while (currentDirectory != null)
             {

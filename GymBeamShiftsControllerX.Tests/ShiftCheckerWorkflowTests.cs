@@ -193,13 +193,101 @@ public sealed class ShiftCheckerWorkflowTests : IDisposable
             _driver.ExecuteScript("return sessionStorage.getItem('immediateReselect');"));
     }
 
+    [Fact]
+    public void CheckForShifts_NotifiesOncePerIterationWhenTargetShiftHasNoButton()
+    {
+        DateTime shiftDate = GetFutureSaturday();
+        string dateText = shiftDate.ToString("dd.MM.yyyy", CultureInfo.InvariantCulture);
+        string rows = $"<tr><td>{dateText}</td><td>08:00</td><td>16:00</td><td>Target User</td><td></td></tr>";
+        string scenario = CreateScenarioHtml(rows);
+        var messages = new List<string>();
+        NavigateToScenario(scenario);
+        var checker = CreateChecker(
+            takeLunch: false,
+            targetShiftDateTime: $"{shiftDate:yyyy-MM-dd}T08:00",
+            sendTelegramMessage: messages.Add);
+
+        checker.CheckForShifts();
+        NavigateToScenario(scenario);
+        checker.CheckForShifts();
+
+        Assert.Equal(2, messages.Count);
+        Assert.All(messages, message =>
+        {
+            Assert.Contains("Знайдено вибрану зміну", message);
+            Assert.Contains($"Дата: {shiftDate:dd.MM.yyyy}", message);
+            Assert.Contains("Час: 08:00-16:00", message);
+            Assert.Contains("немає кнопки «Prihlásiť»", message);
+        });
+    }
+
+    [Fact]
+    public void CheckForShifts_DoesNotSendUnavailableMessageWhenTargetShiftHasButton()
+    {
+        DateTime shiftDate = GetFutureSaturday();
+        string rows = CreateShiftRow(shiftDate, "08:00", "Target User");
+        var messages = new List<string>();
+        NavigateToScenario(CreateScenarioHtml(rows));
+        var checker = CreateChecker(
+            takeLunch: false,
+            targetShiftDateTime: $"{shiftDate:yyyy-MM-dd}T08:00",
+            sendTelegramMessage: messages.Add);
+
+        checker.CheckForShifts();
+
+        Assert.Empty(messages);
+    }
+
+    [Fact]
+    public void CheckForShifts_DoesNotNotifyWhenTargetDateTimeDoesNotMatch()
+    {
+        DateTime shiftDate = GetFutureSaturday();
+        string dateText = shiftDate.ToString("dd.MM.yyyy", CultureInfo.InvariantCulture);
+        string rows = $"<tr><td>{dateText}</td><td>08:00</td><td>16:00</td><td>Other shift</td><td></td></tr>";
+        var messages = new List<string>();
+        NavigateToScenario(CreateScenarioHtml(rows));
+        var checker = CreateChecker(
+            takeLunch: false,
+            targetShiftDateTime: $"{shiftDate:yyyy-MM-dd}T09:00",
+            sendTelegramMessage: messages.Add);
+
+        checker.CheckForShifts();
+
+        Assert.Empty(messages);
+    }
+
+    [Fact]
+    public void CheckForShifts_SendsUkrainianSuccessfulShiftMessage()
+    {
+        DateTime shiftDate = GetFutureSaturday();
+        string rows = CreateShiftRow(shiftDate, "23:00", "Successful User");
+        var messages = new List<string>();
+        NavigateToScenario(CreateScenarioHtml(rows));
+        var checker = CreateChecker(
+            takeLunch: false,
+            importantShiftNotificationCount: 1,
+            sendTelegramMessage: messages.Add);
+
+        checker.CheckForShifts();
+
+        string message = Assert.Single(messages);
+        Assert.Contains("Зміну знайдено та успішно обрано", message);
+        Assert.Contains($"Дата: {shiftDate:dd.MM.yyyy}", message);
+        Assert.Contains("Час: 23:00-23:30", message);
+        Assert.Contains("Працівник: Successful User", message);
+        Assert.DoesNotContain("Shift found:", message);
+    }
+
     private ShiftChecker CreateChecker(
         bool takeLunch,
         List<string>? favoriteUsers = null,
         List<string>? startTimesToSkip = null,
         List<string>? excludedDates = null,
         List<string>? holidays = null,
-        List<string>? includedWeekdays = null)
+        List<string>? includedWeekdays = null,
+        string targetShiftDateTime = "",
+        int importantShiftNotificationCount = 0,
+        Action<string>? sendTelegramMessage = null)
     {
         var config = new AppConfig
         {
@@ -208,7 +296,7 @@ public sealed class ShiftCheckerWorkflowTests : IDisposable
             {
                 ShiftMinHoursAhead = 1,
                 WeekendOrHolidayMinHoursAhead = 1,
-                ImportantShiftNotificationCount = 0,
+                ImportantShiftNotificationCount = importantShiftNotificationCount,
                 ImportantShiftNotificationDelayMilliseconds = 0,
                 TelegramDelayMilliseconds = 0
             },
@@ -219,7 +307,8 @@ public sealed class ShiftCheckerWorkflowTests : IDisposable
                 StartTimesToSkip = startTimesToSkip ?? new List<string>(),
                 ExcludedDates = excludedDates ?? new List<string>(),
                 Holidays = holidays ?? new List<string>(),
-                IncludedWeekdays = includedWeekdays ?? new List<string>()
+                IncludedWeekdays = includedWeekdays ?? new List<string>(),
+                TargetShiftDateTime = targetShiftDateTime
             }
         };
 
@@ -230,7 +319,11 @@ public sealed class ShiftCheckerWorkflowTests : IDisposable
             ?? throw new InvalidOperationException("BrowserSession.Driver backing field was not found.");
         driverField.SetValue(browserSession, _driver);
 
-        return new ShiftChecker(browserSession, config, new ShiftRulesStore(config.ShiftRules));
+        return new ShiftChecker(
+            browserSession,
+            config,
+            new ShiftRulesStore(config.ShiftRules),
+            sendTelegramMessage);
     }
 
     private void NavigateToScenario(string html)

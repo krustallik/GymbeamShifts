@@ -1,4 +1,6 @@
+using System;
 using System.Collections.Generic;
+using System.Globalization;
 using GymBeamShiftsControllerX.Models;
 
 namespace GymBeamShiftsControllerX.Services
@@ -36,7 +38,8 @@ namespace GymBeamShiftsControllerX.Services
                         startTimesToSkip),
                     Holidays = CleanList(update.Holidays),
                     ExcludedDates = CleanList(update.ExcludedDates),
-                    FavoriteShiftUsers = CleanList(update.FavoriteShiftUsers)
+                    FavoriteShiftUsers = CleanList(update.FavoriteShiftUsers),
+                    TargetShiftDateTime = CleanTargetShiftDateTime(update.TargetShiftDateTime)
                 };
 
                 return Clone(_current);
@@ -59,7 +62,8 @@ namespace GymBeamShiftsControllerX.Services
                     source.StartTimesToSkipOnWeekendsAndHolidays ?? new List<string>()),
                 Holidays = new List<string>(source.Holidays ?? new List<string>()),
                 ExcludedDates = new List<string>(source.ExcludedDates ?? new List<string>()),
-                FavoriteShiftUsers = new List<string>(source.FavoriteShiftUsers ?? new List<string>())
+                FavoriteShiftUsers = new List<string>(source.FavoriteShiftUsers ?? new List<string>()),
+                TargetShiftDateTime = source.TargetShiftDateTime ?? string.Empty
             };
         }
 
@@ -105,6 +109,23 @@ namespace GymBeamShiftsControllerX.Services
             }
 
             return result;
+        }
+
+        private static string CleanTargetShiftDateTime(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                return string.Empty;
+            }
+
+            return DateTime.TryParseExact(
+                value.Trim(),
+                "yyyy-MM-dd'T'HH:mm",
+                CultureInfo.InvariantCulture,
+                DateTimeStyles.None,
+                out DateTime parsed)
+                ? parsed.ToString("yyyy-MM-dd'T'HH:mm", CultureInfo.InvariantCulture)
+                : string.Empty;
         }
     }
 }

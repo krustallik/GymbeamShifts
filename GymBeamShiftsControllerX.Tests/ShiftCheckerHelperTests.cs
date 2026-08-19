@@ -253,6 +253,103 @@ public class ShiftCheckerHelperTests
         Assert.Equal(new[] { "User B", "User A" }, result.Select(s => s.UserId).ToArray());
     }
 
+    [Fact]
+    public void TryNotifyAboutUnavailableTargetShift_SendsUkrainianMessageForExactMissingButton()
+    {
+        var messages = new List<string>();
+        var config = new AppConfig();
+        var checker = new ShiftChecker(
+            new BrowserSession(config),
+            config,
+            new ShiftRulesStore(config.ShiftRules),
+            messages.Add);
+        var method = ReflectionTestHelper.GetInstanceMethod(
+            typeof(ShiftChecker),
+            "TryNotifyAboutUnavailableTargetShift");
+        var shifts = new List<ShiftEntry>
+        {
+            new()
+            {
+                Date = new DateTime(2026, 8, 25),
+                TimeFrom = "08:00",
+                TimeTo = "16:00",
+                UserId = "Target User",
+                ButtonElement = null
+            }
+        };
+
+        bool result = (bool)method.Invoke(
+            checker,
+            new object[] { shifts, "2026-08-25T08:00" })!;
+
+        Assert.True(result);
+        string message = Assert.Single(messages);
+        Assert.Contains("Знайдено вибрану зміну", message);
+        Assert.Contains("Дата: 25.08.2026", message);
+        Assert.Contains("Час: 08:00-16:00", message);
+        Assert.Contains("немає кнопки «Prihlásiť»", message);
+    }
+
+    [Fact]
+    public void TryNotifyAboutUnavailableTargetShift_RequiresExactDateTimeAndMissingButton()
+    {
+        var messages = new List<string>();
+        var config = new AppConfig();
+        var checker = new ShiftChecker(
+            new BrowserSession(config),
+            config,
+            new ShiftRulesStore(config.ShiftRules),
+            messages.Add);
+        var method = ReflectionTestHelper.GetInstanceMethod(
+            typeof(ShiftChecker),
+            "TryNotifyAboutUnavailableTargetShift");
+        var shifts = new List<ShiftEntry>
+        {
+            new()
+            {
+                Date = new DateTime(2026, 8, 25),
+                TimeFrom = "08:00",
+                TimeTo = "16:00",
+                UserId = "Target User",
+                ButtonElement = TestWebElements.CreateButton()
+            }
+        };
+
+        bool withButton = (bool)method.Invoke(
+            checker,
+            new object[] { shifts, "2026-08-25T08:00" })!;
+        shifts[0].ButtonElement = null;
+        bool wrongTime = (bool)method.Invoke(
+            checker,
+            new object[] { shifts, "2026-08-25T09:00" })!;
+
+        Assert.False(withButton);
+        Assert.False(wrongTime);
+        Assert.Empty(messages);
+    }
+
+    [Fact]
+    public void BuildSuccessfulShiftMessage_IsUkrainian()
+    {
+        var method = ReflectionTestHelper.GetStaticMethod(
+            typeof(ShiftChecker),
+            "BuildSuccessfulShiftMessage");
+        var shift = new ShiftEntry
+        {
+            Date = new DateTime(2026, 8, 25),
+            TimeFrom = "08:00",
+            TimeTo = "16:00",
+            UserId = "Successful User"
+        };
+
+        string message = (string)method.Invoke(null, new object[] { shift })!;
+
+        Assert.Contains("Зміну знайдено та успішно обрано", message);
+        Assert.Contains("Дата: 25.08.2026", message);
+        Assert.Contains("Працівник: Successful User", message);
+        Assert.DoesNotContain("Shift found:", message);
+    }
+
     private static List<ShiftEntry> CreateSampleShifts()
     {
         return new List<ShiftEntry>

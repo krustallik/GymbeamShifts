@@ -16,7 +16,7 @@ namespace GymBeamShiftsControllerX.Services
         private readonly AppConfig _config;
         private readonly int _remoteDebuggingPort;
 
-        public ChromeDriver Driver { get; private set; }
+        public ChromeDriver Driver { get; private set; } = null!;
 
         public BrowserSession(AppConfig config, int remoteDebuggingPort = 9222)
         {
@@ -200,7 +200,7 @@ namespace GymBeamShiftsControllerX.Services
             }
             finally
             {
-                Driver = null;
+                Driver = null!;
             }
         }
     }
