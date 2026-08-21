@@ -79,58 +79,7 @@ namespace GymBeamShiftsControllerX.Services
                     Logger.Log("Cookie-баннер не найден. Пропускаем...");
                 }
 
-                var rows = driver.FindElements(By.CssSelector(AppConstants.TableRowsSelector));
-                Logger.Log($"Найдено строк: {rows.Count}");
-
-                var shiftList = new List<ShiftEntry>();
-
-                foreach (var row in rows)
-                {
-                    var cells = row.FindElements(By.TagName("td"));
-                    if (cells.Count < 5)
-                    {
-                        continue;
-                    }
-
-                    string dateStr = cells[0].Text.Trim();
-                    if (!DateTime.TryParseExact(
-                            dateStr,
-                            "dd.MM.yyyy",
-                            CultureInfo.InvariantCulture,
-                            DateTimeStyles.None,
-                            out var parsedDate))
-                    {
-                        continue;
-                    }
-
-                    string timeFrom = cells[1].Text.Trim();
-                    string timeTo = cells[2].Text.Trim();
-                    string userId = cells[3].Text.Trim();
-
-                    IWebElement? buttonElement = null;
-                    try
-                    {
-                        buttonElement = cells[4].FindElement(By.CssSelector(AppConstants.SubscribeButtonSelector));
-                    }
-                    catch (NoSuchElementException)
-                    {
-                    }
-
-                    shiftList.Add(new ShiftEntry
-                    {
-                        Date = parsedDate,
-                        TimeFrom = timeFrom,
-                        TimeTo = timeTo,
-                        UserId = userId,
-                        ShiftIdentifier = GetShiftIdentifier(
-                            buttonElement,
-                            parsedDate,
-                            timeFrom,
-                            timeTo,
-                            userId),
-                        ButtonElement = buttonElement
-                    });
-                }
+                var shiftList = CollectShiftsAcrossPages(driver, wait);
 
                 var rules = _shiftRulesStore.GetSnapshot();
                 var holidays = ParseDateSet(rules.Holidays);
@@ -175,8 +124,25 @@ namespace GymBeamShiftsControllerX.Services
                             $"Найдена релевантная смена: {shift.Date:dd.MM.yyyy} "
                             + $"{shift.TimeFrom}-{shift.TimeTo}, User: {shift.UserId}");
 
+                        if (!NavigateToPage(driver, wait, shift.PageNumber))
+                        {
+                            Logger.Log(
+                                $"Не удалось перейти на страницу {shift.PageNumber} "
+                                + $"для смены {shift.ShiftIdentifier}. Смена пропущена.");
+                            continue;
+                        }
+
+                        var currentButton = FindCurrentShiftButton(driver, shift);
+                        if (currentButton == null)
+                        {
+                            Logger.Log(
+                                $"Не удалось повторно найти кнопку смены {shift.ShiftIdentifier} "
+                                + $"на странице {shift.PageNumber}. Смена пропущена.");
+                            continue;
+                        }
+
                         Logger.Log("Нажимаем кнопку 'Prihlásiť'.");
-                        ScrollIntoViewAndClick(driver, wait, shift.ButtonElement!);
+                        ScrollIntoViewAndClick(driver, wait, currentButton);
                         Logger.Log("Кнопка 'Prihlásiť' нажата.");
 
                         bool subscriptionConfirmed = false;
@@ -290,6 +256,205 @@ namespace GymBeamShiftsControllerX.Services
                 return true;
             });
             Logger.Log("Выбрано значение 100 в выпадающем меню.");
+        }
+
+        private static List<ShiftEntry> CollectShiftsAcrossPages(
+            IWebDriver driver,
+            WebDriverWait wait)
+        {
+            const int maximumPages = 5;
+            var shifts = new List<ShiftEntry>();
+
+            NavigateToPage(driver, wait, 1);
+            int pageNumber = GetActivePageNumber(driver) ?? 1;
+
+            while (pageNumber <= maximumPages)
+            {
+                var pageShifts = ParseCurrentPage(driver, pageNumber);
+                shifts.AddRange(pageShifts);
+                Logger.Log(
+                    $"На странице {pageNumber} найдено строк: "
+                    + $"{driver.FindElements(By.CssSelector(AppConstants.TableRowsSelector)).Count}. "
+                    + $"Распознано смен: {pageShifts.Count}.");
+
+                if (pageNumber == maximumPages || !TryMoveToAdjacentPage(driver, wait, moveForward: true))
+                {
+                    break;
+                }
+
+                pageNumber = GetActivePageNumber(driver) ?? pageNumber + 1;
+            }
+
+            Logger.Log($"Собран общий список смен: {shifts.Count} (страниц обработано: {pageNumber}).");
+            return shifts;
+        }
+
+        private static List<ShiftEntry> ParseCurrentPage(IWebDriver driver, int pageNumber)
+        {
+            var shifts = new List<ShiftEntry>();
+            var rows = driver.FindElements(By.CssSelector(AppConstants.TableRowsSelector));
+
+            foreach (var row in rows)
+            {
+                var cells = row.FindElements(By.TagName("td"));
+                if (cells.Count < 5)
+                {
+                    continue;
+                }
+
+                string dateStr = cells[0].Text.Trim();
+                if (!DateTime.TryParseExact(
+                        dateStr,
+                        "dd.MM.yyyy",
+                        CultureInfo.InvariantCulture,
+                        DateTimeStyles.None,
+                        out var parsedDate))
+                {
+                    continue;
+                }
+
+                string timeFrom = cells[1].Text.Trim();
+                string timeTo = cells[2].Text.Trim();
+                string userId = cells[3].Text.Trim();
+
+                IWebElement? buttonElement = null;
+                try
+                {
+                    buttonElement = cells[4].FindElement(
+                        By.CssSelector(AppConstants.SubscribeButtonSelector));
+                }
+                catch (NoSuchElementException)
+                {
+                }
+
+                shifts.Add(new ShiftEntry
+                {
+                    Date = parsedDate,
+                    TimeFrom = timeFrom,
+                    TimeTo = timeTo,
+                    UserId = userId,
+                    ShiftIdentifier = GetShiftIdentifier(
+                        buttonElement,
+                        parsedDate,
+                        timeFrom,
+                        timeTo,
+                        userId),
+                    PageNumber = pageNumber,
+                    ButtonElement = buttonElement
+                });
+            }
+
+            return shifts;
+        }
+
+        private static IWebElement? FindCurrentShiftButton(IWebDriver driver, ShiftEntry shift)
+        {
+            foreach (var currentShift in ParseCurrentPage(driver, shift.PageNumber))
+            {
+                if (string.Equals(
+                        currentShift.ShiftIdentifier,
+                        shift.ShiftIdentifier,
+                        StringComparison.Ordinal))
+                {
+                    return currentShift.ButtonElement;
+                }
+            }
+
+            return null;
+        }
+
+        private static bool NavigateToPage(
+            IWebDriver driver,
+            WebDriverWait wait,
+            int targetPageNumber)
+        {
+            int currentPageNumber = GetActivePageNumber(driver) ?? 1;
+            int remainingMoves = 5;
+
+            while (currentPageNumber != targetPageNumber && remainingMoves-- > 0)
+            {
+                bool moveForward = currentPageNumber < targetPageNumber;
+                if (!TryMoveToAdjacentPage(driver, wait, moveForward))
+                {
+                    return false;
+                }
+
+                currentPageNumber = GetActivePageNumber(driver)
+                    ?? currentPageNumber + (moveForward ? 1 : -1);
+            }
+
+            return currentPageNumber == targetPageNumber;
+        }
+
+        private static bool TryMoveToAdjacentPage(
+            IWebDriver driver,
+            WebDriverWait wait,
+            bool moveForward)
+        {
+            string buttonId = moveForward
+                ? AppConstants.NextPaginationButtonId
+                : AppConstants.PreviousPaginationButtonId;
+            var paginationButtons = driver.FindElements(By.Id(buttonId));
+            if (paginationButtons.Count == 0)
+            {
+                return false;
+            }
+
+            var paginationButton = paginationButtons[0];
+            string classes = paginationButton.GetAttribute("class") ?? string.Empty;
+            string? ariaDisabled = paginationButton.GetAttribute("aria-disabled");
+            var links = paginationButton.FindElements(By.TagName("a"));
+            if (classes.Split(' ', StringSplitOptions.RemoveEmptyEntries).Contains("disabled")
+                || string.Equals(ariaDisabled, "true", StringComparison.OrdinalIgnoreCase)
+                || links.Count == 0
+                || string.Equals(
+                    links[0].GetAttribute("aria-disabled"),
+                    "true",
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            int? previousPageNumber = GetActivePageNumber(driver);
+            links[0].Click();
+
+            wait.Until(webDriver =>
+            {
+                int? currentPageNumber = GetActivePageNumber(webDriver);
+                return previousPageNumber.HasValue
+                    ? currentPageNumber.HasValue && currentPageNumber != previousPageNumber
+                    : IsTableProcessingComplete(webDriver);
+            });
+            wait.Until(IsTableProcessingComplete);
+            return true;
+        }
+
+        private static int? GetActivePageNumber(IWebDriver driver)
+        {
+            var activePages = driver.FindElements(
+                By.CssSelector(AppConstants.ActivePaginationPageSelector));
+            return activePages.Count > 0 && int.TryParse(activePages[0].Text.Trim(), out int pageNumber)
+                ? pageNumber
+                : null;
+        }
+
+        private static bool IsTableProcessingComplete(IWebDriver driver)
+        {
+            foreach (var processingElement in driver.FindElements(By.CssSelector(".dataTables_processing")))
+            {
+                try
+                {
+                    if (processingElement.Displayed)
+                    {
+                        return false;
+                    }
+                }
+                catch (StaleElementReferenceException)
+                {
+                }
+            }
+
+            return true;
         }
 
         private static string GetShiftIdentifier(

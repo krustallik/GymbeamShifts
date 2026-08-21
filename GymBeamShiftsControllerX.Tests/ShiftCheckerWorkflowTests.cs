@@ -190,7 +190,62 @@ public sealed class ShiftCheckerWorkflowTests : IDisposable
             new Uri(_driver.Url).Fragment);
         Assert.Equal(
             "true",
+            _driver.ExecuteScript("return sessionStorage.getItem('refreshedAfterFirstConfirmation');"));
+        Assert.Equal(
+            "true",
             _driver.ExecuteScript("return sessionStorage.getItem('immediateReselect');"));
+    }
+
+    [Fact]
+    public void CheckForShifts_CollectsFirstFivePagesAndUsesCombinedPriorities()
+    {
+        DateTime shiftDate = GetFutureSaturday();
+        var pages = new List<string>
+        {
+            CreateShiftRow(shiftDate, "22:00", "Page 1 User"),
+            CreateShiftRow(shiftDate, "22:10", "Page 2 User"),
+            CreateShiftRow(shiftDate, "22:20", "Page 3 User"),
+            CreateShiftRow(shiftDate, "22:30", "Page 4 User"),
+            CreateShiftRow(shiftDate, "23:00", "Page 5 Favorite"),
+            CreateShiftRow(shiftDate, "23:10", "Page 6 Ignored")
+        };
+        NavigateToScenario(CreatePaginatedScenarioHtml(pages));
+        var checker = CreateChecker(
+            takeLunch: false,
+            favoriteUsers: new List<string> { "Page 5 Favorite", "Page 6 Ignored" });
+
+        checker.CheckForShifts();
+
+        Assert.Equal(
+            "#completed-lunch_no-Page%205%20Favorite",
+            new Uri(_driver.Url).Fragment);
+        Assert.Equal(
+            "5",
+            _driver.ExecuteScript("return sessionStorage.getItem('maxVisitedPage');"));
+    }
+
+    [Fact]
+    public void CheckForShifts_StopsAtLastAvailablePaginationPage()
+    {
+        DateTime shiftDate = GetFutureSaturday();
+        var pages = new List<string>
+        {
+            CreateShiftRow(shiftDate, "22:00", "Page 1 User"),
+            CreateShiftRow(shiftDate, "23:00", "Page 2 Favorite")
+        };
+        NavigateToScenario(CreatePaginatedScenarioHtml(pages));
+        var checker = CreateChecker(
+            takeLunch: true,
+            favoriteUsers: new List<string> { "Page 2 Favorite" });
+
+        checker.CheckForShifts();
+
+        Assert.Equal(
+            "#completed-lunch_yes-Page%202%20Favorite",
+            new Uri(_driver.Url).Fragment);
+        Assert.Equal(
+            "2",
+            _driver.ExecuteScript("return sessionStorage.getItem('maxVisitedPage');"));
     }
 
     [Fact]
@@ -386,6 +441,98 @@ public sealed class ShiftCheckerWorkflowTests : IDisposable
             """;
     }
 
+    private static string CreatePaginatedScenarioHtml(IReadOnlyList<string> pageRows)
+    {
+        string pagesJson = System.Text.Json.JsonSerializer.Serialize(pageRows);
+        return $$"""
+            <!doctype html>
+            <html>
+            <head><meta charset='utf-8'><title>Paginated shifts</title></head>
+            <body>
+              <button id='cookies-consent-essential' onclick='this.remove()'>Accept cookies</button>
+              <select name='invitations_table_length' onchange='goToPage(1)'>
+                <option value='100'>100</option>
+              </select>
+              <table id='invitations_table'>
+                <thead><tr><th>User</th><th>Od</th></tr></thead>
+                <tbody id='shiftRows'></tbody>
+              </table>
+              <div id='invitations_table_paginate' class='dataTables_paginate paging_simple_numbers'>
+                <ul id='pagination' class='pagination'></ul>
+              </div>
+              <div id='modal_subscribe' style='display:none'>
+                <button class='btn-close' onclick='closeSubscription()'>Close</button>
+                <h4 id='shiftTitle'></h4>
+                <label><input id='lunch_yes' name='lunch' type='radio'> Yes</label>
+                <label><input id='lunch_no' name='lunch' type='radio'> No</label>
+                <button id='subscribe_submit' onclick='completeSubscription()'>Confirm</button>
+              </div>
+              <script>
+                const pages = {{pagesJson}};
+                let currentPage = 1;
+                let selectedUser = '';
+
+                function pageItem(id, label, targetPage, disabled, active) {
+                  const disabledAttributes = disabled ? " aria-disabled='true' tabindex='-1'" : '';
+                  return `<li${id ? ` id='${id}'` : ''} class='paginate_button page-item${disabled ? ' disabled' : ''}${active ? ' active' : ''}'>` +
+                    `<a href='#' class='page-link'${disabledAttributes} onclick='goToPage(${targetPage}); return false'>${label}</a></li>`;
+                }
+
+                function render() {
+                  document.getElementById('shiftRows').innerHTML = location.hash.startsWith('#completed-')
+                    ? '<tr><td>completed</td></tr>'
+                    : pages[currentPage - 1];
+
+                  let pagination = pageItem(
+                    'invitations_table_previous',
+                    'Predchádzajúca',
+                    currentPage - 1,
+                    currentPage === 1,
+                    false);
+                  for (let page = 1; page <= pages.length; page++) {
+                    pagination += pageItem('', String(page), page, false, page === currentPage);
+                  }
+                  pagination += pageItem(
+                    'invitations_table_next',
+                    'Nasledujúca',
+                    currentPage + 1,
+                    currentPage === pages.length,
+                    false);
+                  document.getElementById('pagination').innerHTML = pagination;
+                }
+
+                function goToPage(page) {
+                  if (page < 1 || page > pages.length) return;
+                  currentPage = page;
+                  const maxVisited = Number(sessionStorage.getItem('maxVisitedPage') || '1');
+                  sessionStorage.setItem('maxVisitedPage', String(Math.max(maxVisited, page)));
+                  render();
+                }
+
+                function subscribe(user) {
+                  selectedUser = user;
+                  document.getElementById('shiftTitle').textContent = user;
+                  document.getElementById('modal_subscribe').style.display = 'block';
+                }
+
+                function closeSubscription() {
+                  document.getElementById('modal_subscribe').style.display = 'none';
+                }
+
+                function completeSubscription() {
+                  const lunch = document.querySelector("input[name='lunch']:checked").id;
+                  history.replaceState(null, '', '#completed-' + lunch + '-' + encodeURIComponent(selectedUser));
+                  document.getElementById('modal_subscribe').style.display = 'none';
+                  render();
+                }
+
+                render();
+              </script>
+            </body>
+            </html>
+            """;
+    }
+
     private static string CreateSequentialScenarioHtml(DateTime firstDate, DateTime secondDate)
     {
         string firstRow = CreateShiftRow(firstDate, "22:00", "First User");
@@ -430,6 +577,7 @@ public sealed class ShiftCheckerWorkflowTests : IDisposable
                   document.getElementById('modal_subscribe').style.display = 'none';
                 }
                 if (location.hash.startsWith('#step-1-')) {
+                  sessionStorage.setItem('refreshedAfterFirstConfirmation', 'true');
                   document.getElementById('shiftRows').innerHTML = `{{secondRow}}`;
                 } else if (location.hash.startsWith('#completed-')) {
                   document.getElementById('shiftRows').innerHTML = '<tr><td>completed</td></tr>';

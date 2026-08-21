@@ -10,6 +10,7 @@ namespace GymBeamShiftsControllerX.Models
         public string TimeTo { get; set; } = null!;
         public string UserId { get; set; } = null!;
         public string ShiftIdentifier { get; set; } = string.Empty;
+        public int PageNumber { get; set; } = 1;
         public IWebElement? ButtonElement { get; set; }
     }
 }

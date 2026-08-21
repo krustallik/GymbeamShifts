@@ -13,6 +13,9 @@
         public const string SortHeaderSelector = "#invitations_table thead th:nth-child(2)";
         public const string TableRowsSelector = "#invitations_table tbody tr";
         public const string SubscribeButtonSelector = "button.subscribe_shift";
+        public const string ActivePaginationPageSelector = "#invitations_table_paginate li.active a";
+        public const string PreviousPaginationButtonId = "invitations_table_previous";
+        public const string NextPaginationButtonId = "invitations_table_next";
 
         public const string CookiesEssentialButtonId = "cookies-consent-essential";
 
