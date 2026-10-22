@@ -170,8 +170,16 @@ docker compose exec -T caddy caddy reload \
   --address unix//run/caddy-admin/admin.sock \
   --config /etc/caddy/Caddyfile
 
-curl --fail --silent --show-error --retry 12 --retry-delay 5 --retry-all-errors \
-  "https://${ADMIN_MANAGER_PUBLIC_HOST:-admin.mapa-svietidiel.sk}/healthz" >/dev/null
+# Compose loads .env independently of this shell. Read the effective host from
+# the running manager so migrated domains use the same host as Caddy.
+health_host="$(docker compose exec -T gymbeam-admin-manager printenv ADMIN_MANAGER_PUBLIC_HOST)"
+if [[ -z "$health_host" ]]; then
+  echo "ERROR: Admin Manager public host is empty." >&2
+  false
+fi
+curl --fail --silent --show-error --connect-timeout 10 --max-time 30 \
+  --retry 12 --retry-delay 5 --retry-all-errors \
+  "https://${health_host}/healthz" >/dev/null
 
 remove_managed_bot_backups "$SNAPSHOT_DIR"
 ROLLBACK_ARMED=0

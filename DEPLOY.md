@@ -1,5 +1,17 @@
 # CI/CD і розгортання двох ботів
 
+## Чинний сервер після перенесення
+
+Станом на 22.10.2026 сервер: `169.58.239.149`, репозиторій: `/srv/GymbeamShifts`.
+Адмінка: `https://admin.ihorhub.eu`; боти: `https://bot-ihor.ihorhub.eu` та
+`https://bot-andriana.ihorhub.eu`. На сервері в `.env` задано
+`ADMIN_MANAGER_PUBLIC_HOST=admin.ihorhub.eu`; фінальна HTTPS-перевірка deploy
+читає фактичне значення з контейнера Admin Manager.
+
+Git цього репозиторію на сервері використовує локальну настройку `core.sshCommand`
+з ключем `/root/.ssh/Gymbeam_github_deploy` для читання GitHub.
+Наведена нижче схема `mapa-svietidiel.sk` описує початкове розгортання.
+
 ## Цільова схема
 
 Один Docker-образ запускається у двох ізольованих контейнерах:

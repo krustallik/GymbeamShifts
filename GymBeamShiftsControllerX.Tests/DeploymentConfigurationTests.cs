@@ -99,6 +99,16 @@ public class DeploymentConfigurationTests
     }
 
     [Fact]
+    public void DeployScript_UsesEffectiveContainerHostForHttpsHealthCheck()
+    {
+        string deploy = ReadRootFile(Path.Combine("scripts", "deploy.sh"));
+        Assert.Contains("docker compose exec -T gymbeam-admin-manager printenv ADMIN_MANAGER_PUBLIC_HOST", deploy);
+        Assert.Contains("https://${health_host}/healthz", deploy);
+        Assert.Contains("--connect-timeout 10 --max-time 30", deploy);
+        Assert.DoesNotContain("https://${ADMIN_MANAGER_PUBLIC_HOST:-admin.mapa-svietidiel.sk}/healthz", deploy);
+    }
+
+    [Fact]
     public void DeployScript_ReloadsCaddyAfterConfigurationChanges()
     {
         string deployScript = ReadRootFile(Path.Combine("scripts", "deploy.sh"));
