@@ -119,8 +119,10 @@ flowchart TB
 - Pagination-aware scanning of up to 500 visible shifts per scan.
 - Configurable weekday, holiday, excluded-date, start-time, and minimum lead-time
   rules.
-- Preferred-worker prioritization and explicit target-shift monitoring.
+- Shift-type and location prioritization with exclusion lists and explicit target-shift monitoring.
 - Detection and persistent skipping of shifts reserved for new workers.
+- Parsing of combined shift-time ranges, including overnight shifts.
+- Start-time exclusions cover an inclusive ±30-minute window, including across midnight, with separate weekend and holiday scope.
 - Configurable lunch selection and repeated important-shift notifications.
 - Recovery from stale DOM elements, disconnected WebDriver sessions, and failed
   login attempts with diagnostic HTML and screenshots.
@@ -236,7 +238,7 @@ files. The main groups cover:
 - shift portal and Telegram credentials;
 - browser mode and window size;
 - polling, lead-time, restart, and notification timing;
-- weekday, holiday, exclusion, preferred-user, and target-shift rules;
+- weekday, holiday, exclusion, shift-type/location priority, and target-shift rules;
 - per-instance administration credentials and session security.
 
 Use only the templates in `deploy/examples/` as a starting point. Never place

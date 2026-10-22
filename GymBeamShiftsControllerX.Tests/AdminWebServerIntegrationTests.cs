@@ -74,7 +74,7 @@ public class AdminWebServerIntegrationTests : IDisposable
             {
                 TakeLunch = false,
                 IncludedWeekdays = new List<string> { "Monday" },
-                FavoriteShiftUsers = new List<string> { "Andrea Pavlíková" }
+                PreferredShiftTypes = new List<string> { "Andrea Pavlíková" }
             }
         };
 
@@ -92,6 +92,53 @@ public class AdminWebServerIntegrationTests : IDisposable
 
         var handler = new HttpClientHandler { CookieContainer = _cookies };
         _client = new HttpClient(handler) { BaseAddress = new Uri($"http://localhost:{port}/") };
+    }
+
+    [Fact]
+    public async Task PreferenceLists_RoundTripNormalizeAndPersistAllFourFields()
+    {
+        await LoginAsync("testadmin", "testpass");
+        var payload = new
+        {
+            preferredShiftTypes = new[] { " CTP2  Export ", "ctp2 export", "RAS Výroba" },
+            excludedShiftTypes = new[] { " Olepovanie B2B " },
+            preferredLocations = new[] { " Rastislavova ", "RASTISLAVOVA" },
+            excludedLocations = new[] { " CTP2 - whs - letisko " }
+        };
+        var response = await _client.PutAsync("/api/shift-rules", new StringContent(
+            JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json"));
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var result = JsonDocument.Parse(await _client.GetStringAsync("/api/shift-rules"));
+        var rules = result.RootElement;
+        Assert.Equal(new[] { "CTP2 Export", "RAS Výroba" }, rules.GetProperty("preferredShiftTypes").EnumerateArray().Select(x => x.GetString()));
+        Assert.Equal("Olepovanie B2B", rules.GetProperty("excludedShiftTypes")[0].GetString());
+        Assert.Single(rules.GetProperty("preferredLocations").EnumerateArray());
+        Assert.Equal("Rastislavova", rules.GetProperty("preferredLocations")[0].GetString());
+        Assert.Equal("CTP2 - whs - letisko", rules.GetProperty("excludedLocations")[0].GetString());
+        var persisted = JsonSerializer.Deserialize<AppConfig>(File.ReadAllText(_configPath))!;
+        Assert.Equal(new[] { "CTP2 Export", "RAS Výroba" }, persisted.ShiftRules.PreferredShiftTypes);
+        Assert.Equal(new[] { "Olepovanie B2B" }, persisted.ShiftRules.ExcludedShiftTypes);
+        Assert.Equal(new[] { "Rastislavova" }, persisted.ShiftRules.PreferredLocations);
+        Assert.Equal(new[] { "CTP2 - whs - letisko" }, persisted.ShiftRules.ExcludedLocations);
+    }
+
+    [Theory]
+    [InlineData("preferredShiftTypes")]
+    [InlineData("excludedShiftTypes")]
+    [InlineData("preferredLocations")]
+    [InlineData("excludedLocations")]
+    public async Task PreferenceLists_RejectOversizedNameOrListWithoutChangingConfig(string field)
+    {
+        await LoginAsync("testadmin", "testpass");
+        string original = File.ReadAllText(_configPath);
+        foreach (var values in new[] { new[] { new string('x', 201) }, Enumerable.Repeat("value", 101).ToArray() })
+        {
+            var payload = new Dictionary<string, string[]> { [field] = values };
+            var response = await _client.PutAsync("/api/shift-rules", new StringContent(
+                JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json"));
+            Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+            Assert.Equal(original, File.ReadAllText(_configPath));
+        }
     }
 
     [Fact]
@@ -203,7 +250,7 @@ public class AdminWebServerIntegrationTests : IDisposable
         Assert.Equal(4, document.RootElement.GetProperty("importantShiftNotificationCount").GetInt32());
         Assert.Equal(30000, document.RootElement.GetProperty("importantShiftNotificationDelayMilliseconds").GetInt32());
         Assert.Empty(document.RootElement.GetProperty("startTimesToSkipOnWeekendsAndHolidays").EnumerateArray());
-        Assert.Equal("Andrea Pavlíková", document.RootElement.GetProperty("favoriteShiftUsers")[0].GetString());
+        Assert.Equal("Andrea Pavlíková", document.RootElement.GetProperty("preferredShiftTypes")[0].GetString());
     }
 
     [Fact]
@@ -223,7 +270,7 @@ public class AdminWebServerIntegrationTests : IDisposable
           "startTimesToSkipOnWeekendsAndHolidays": ["21:45"],
           "holidays": ["2026-05-08"],
           "excludedDates": ["2026-05-09"],
-          "favoriteShiftUsers": ["Lukáš Fialek"],
+          "preferredShiftTypes": ["Lukáš Fialek"],
           "targetShiftDateTimes": ["2026-08-25T08:00", "2026-08-26T09:30"]
         }
         """;
@@ -246,7 +293,7 @@ public class AdminWebServerIntegrationTests : IDisposable
         Assert.Equal(
             "21:45",
             document.RootElement.GetProperty("startTimesToSkipOnWeekendsAndHolidays")[0].GetString());
-        Assert.Equal("Lukáš Fialek", document.RootElement.GetProperty("favoriteShiftUsers")[0].GetString());
+        Assert.Equal("Lukáš Fialek", document.RootElement.GetProperty("preferredShiftTypes")[0].GetString());
         Assert.Equal(
             2,
             document.RootElement.GetProperty("targetShiftDateTimes").GetArrayLength());
@@ -262,7 +309,7 @@ public class AdminWebServerIntegrationTests : IDisposable
             "21:45",
             savedJson.RootElement.GetProperty("ShiftRules")
                 .GetProperty("StartTimesToSkipOnWeekendsAndHolidays")[0].GetString());
-        Assert.Equal("Lukáš Fialek", savedJson.RootElement.GetProperty("ShiftRules").GetProperty("FavoriteShiftUsers")[0].GetString());
+        Assert.Equal("Lukáš Fialek", savedJson.RootElement.GetProperty("ShiftRules").GetProperty("PreferredShiftTypes")[0].GetString());
         Assert.Equal(
             2,
             savedJson.RootElement.GetProperty("ShiftRules").GetProperty("TargetShiftDateTimes").GetArrayLength());
@@ -563,7 +610,7 @@ public class AdminWebServerIntegrationTests : IDisposable
           },
           "ShiftRules": {
             "IncludedWeekdays": ["Monday"],
-            "FavoriteShiftUsers": ["Andrea Pavlíková"]
+            "PreferredShiftTypes": ["Andrea Pavlíková"]
           }
         }
         """;

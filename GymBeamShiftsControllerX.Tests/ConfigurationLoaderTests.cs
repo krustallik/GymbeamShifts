@@ -145,7 +145,7 @@ public class ConfigurationLoaderTests
     }
 
     [Fact]
-    public void Load_DeserializesFavoriteShiftUsers_CaseInsensitively()
+    public void Load_DeserializesPreferredShiftTypes_CaseInsensitively()
     {
         string fileName = $"appconfig.loader.{Guid.NewGuid():N}.json";
         string path = Path.Combine(TestPathHelper.GetWorkspaceRoot(), fileName);
@@ -170,7 +170,7 @@ public class ConfigurationLoaderTests
     "ChatId": "chat"
   },
   "ShiftRules": {
-    "FavoriteShiftUsers": ["Andrea Pavlíková", "Lukáš Fialek"]
+    "PreferredShiftTypes": ["Andrea Pavlíková", "Lukáš Fialek"]
   }
 }
 """);
@@ -178,7 +178,7 @@ public class ConfigurationLoaderTests
             var cfg = ConfigurationLoader.Load(fileName);
 
             Assert.Equal("login", cfg.Auth.Login);
-            Assert.Equal(new[] { "Andrea Pavlíková", "Lukáš Fialek" }, cfg.ShiftRules.FavoriteShiftUsers);
+            Assert.Equal(new[] { "Andrea Pavlíková", "Lukáš Fialek" }, cfg.ShiftRules.PreferredShiftTypes);
         }
         finally
         {
@@ -330,7 +330,7 @@ BADLINE
                 ShiftRules = new ShiftRulesSettings
                 {
                     IncludedWeekdays = new List<string> { "Friday" },
-                    FavoriteShiftUsers = new List<string> { "Andrea Pavlíková" },
+                    PreferredShiftTypes = new List<string> { "Andrea Pavlíková" },
                     TargetShiftDateTimes = new List<string>
                     {
                         "2026-08-25T08:00",
@@ -353,7 +353,7 @@ BADLINE
   },
   "ShiftRules": {
     "IncludedWeekdays": ["Friday"],
-    "FavoriteShiftUsers": ["Andrea Pavlíková"],
+    "PreferredShiftTypes": ["Andrea Pavlíková"],
     "TargetShiftDateTimes": ["2026-08-25T08:00", "2026-08-26T09:30"]
   }
 }
@@ -363,7 +363,7 @@ BADLINE
             var loaded = ConfigurationLoader.Load(fileName);
 
             Assert.Equal(original.ShiftRules.IncludedWeekdays, loaded.ShiftRules.IncludedWeekdays);
-            Assert.Equal(original.ShiftRules.FavoriteShiftUsers, loaded.ShiftRules.FavoriteShiftUsers);
+            Assert.Equal(original.ShiftRules.PreferredShiftTypes, loaded.ShiftRules.PreferredShiftTypes);
             Assert.Equal(original.ShiftRules.TargetShiftDateTimes, loaded.ShiftRules.TargetShiftDateTimes);
             Assert.Equal(original.Auth.LoginUrl, loaded.Auth.LoginUrl);
         }

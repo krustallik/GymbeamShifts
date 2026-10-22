@@ -1,6 +1,6 @@
 {
   "Auth": {
-    "LoginUrl": "https://part-time.gymbeam.com/web/login",
+    "LoginUrl": "https://part-time.gymbeam.com/sk/web/login",
     "Login": "${GYMBEAM_AUTH_LOGIN}",
     "Password": "${GYMBEAM_AUTH_PASSWORD}",
     "SuccessUrlContains": "/news"
@@ -24,7 +24,10 @@
     "ImportantShiftNotificationDelayMilliseconds": 30000
   },
   "ShiftRules": {
-    "StartTimesToSkip": ["22:00", "21:45"],
+    "StartTimesToSkip": [
+      "22:00",
+      "21:45"
+    ],
     "StartTimesToSkipOnWeekendsAndHolidays": [],
     "Holidays": [
       "2026-01-01",
@@ -55,8 +58,14 @@
       "2027-12-26"
     ],
     "ExcludedDates": [],
-    "IncludedWeekdays": ["Monday", "Friday"],
-    "FavoriteShiftUsers": [],
-    "TargetShiftDateTimes": []
+    "IncludedWeekdays": [
+      "Monday",
+      "Friday"
+    ],
+    "PreferredShiftTypes": [],
+    "TargetShiftDateTimes": [],
+    "ExcludedShiftTypes": [],
+    "PreferredLocations": [],
+    "ExcludedLocations": []
   }
 }

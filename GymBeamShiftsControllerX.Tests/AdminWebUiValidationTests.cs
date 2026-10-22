@@ -9,7 +9,7 @@ namespace GymBeamShiftsControllerX.Tests;
 public sealed class AdminWebUiValidationTests
 {
     [Fact]
-    public void BotAdminUi_IsUkrainianHasHelpForEverySettingAndOmitsTodayLogs()
+    public void BotAdminUi_IsUkrainianHasHelpForEverySettingAndIncludesCollapsibleLogs()
     {
         string html = (string)ReflectionTestHelper
             .GetStaticMethod(typeof(AdminWebServer), "BuildAdminHtml")
@@ -18,18 +18,22 @@ public sealed class AdminWebUiValidationTests
         Assert.Contains("lang='uk'", html);
         Assert.Contains("Правила вибору змін", html);
         Assert.Contains("Мінімум годин до початку зміни", html);
-        Assert.Contains("Пріоритетні працівники", html);
+        Assert.Contains("Пріоритетні типи змін", html);
         Assert.Contains("Дати й час вибраних змін", html);
         Assert.Contains("Застосовувати у вихідні та свята", html);
         Assert.DoesNotContain("class='time-scope-title'", html);
         Assert.DoesNotContain("id='startTimeScopeHelp'", html);
         Assert.Contains("id='startTimeScopeOptions'", html);
+        Assert.Contains("13:30–14:30", html);
+        Assert.Contains("<label for='startTimesToSkip'>Час початку", html);
+        Assert.Contains("<label for='holidays'>Святкові дати", html);
+        Assert.Contains("±30 хв", html);
         Assert.Contains("oninput='renderStartTimeScopeOptions()'", html);
         Assert.True(Count(html, "class='help'") >= 12);
         Assert.DoesNotContain("Today Logs", html);
         Assert.DoesNotContain("Refresh Logs", html);
-        Assert.DoesNotContain("id='logs'", html);
-        Assert.DoesNotContain("loadLogs()", html);
+        Assert.Contains("id='logs'", html);
+        Assert.Contains("loadLogs()", html);
         Assert.Contains("id='settingsButton'", html);
         Assert.Contains("id='settingsDialog'", html);
         Assert.Contains("/api/user-credentials", html);
@@ -95,13 +99,33 @@ public sealed class AdminWebUiValidationTests
                 document.getElementById('targetShiftDateTimes').value = '2026-08-25 08:00\n2026-08-26 09:30';
                 document.getElementById('includedWeekdays').value = 'Monday\nFriday';
                 document.getElementById('startTimesToSkip').value = '22:00\n21:45';
-                document.getElementById('favoriteShiftUsers').value = 'Test User';
+                document.getElementById('preferredShiftTypes').value = 'Test User';
                 document.getElementById('holidays').value = '2028-02-29';
                 document.getElementById('excludedDates').value = '2026-12-24';
                 document.getElementById('startTimesToSkip').dispatchEvent(new Event('input', { bubbles: true }));
                 document.querySelector("input[data-start-time='22:00']").click();
                 """);
 
+            js.ExecuteScript("""
+                document.getElementById('preferredShiftTypes').value = 'CTP2 Export\nRAS Výroba';
+                document.getElementById('excludedShiftTypes').value = 'Olepovanie B2B';
+                document.getElementById('preferredLocations').value = 'Rastislavova';
+                document.getElementById('excludedLocations').value = 'CTP2 - whs - letisko';
+                """);
+            Assert.Equal("CTP2 Export,RAS Výroba", js.ExecuteScript("return buildRulesPayload().preferredShiftTypes.join(',')"));
+            Assert.Equal("Olepovanie B2B", js.ExecuteScript("return buildRulesPayload().excludedShiftTypes[0]"));
+            Assert.Equal("Rastislavova", js.ExecuteScript("return buildRulesPayload().preferredLocations[0]"));
+            Assert.Equal("CTP2 - whs - letisko", js.ExecuteScript("return buildRulesPayload().excludedLocations[0]"));
+            Assert.Empty(driver.FindElements(By.Id("favoriteShiftUsers")));
+            js.ExecuteScript("document.getElementById('app').classList.remove('hidden');document.getElementById('loginCard').classList.add('hidden');");
+            foreach (int width in new[] { 1440, 390 })
+            {
+                driver.Manage().Window.Size = new System.Drawing.Size(width, 1000);
+                var ratio = Convert.ToDouble(js.ExecuteScript("return document.querySelector('.container').getBoundingClientRect().width / innerWidth"));
+                Assert.InRange(ratio, .90, .95);
+                Assert.True((bool)js.ExecuteScript("return document.documentElement.scrollWidth <= innerWidth")!);
+                Assert.Equal(width > 700 ? "2" : "1", js.ExecuteScript("return String(getComputedStyle(document.querySelector('.preferences-grid')).gridTemplateColumns.split(' ').length)"));
+            }
             var validPayload = js.ExecuteScript("return buildRulesPayload();");
             Assert.NotNull(validPayload);
             Assert.Equal(
@@ -160,9 +184,9 @@ public sealed class AdminWebUiValidationTests
             js.ExecuteScript("document.getElementById('targetShiftDateTimes').value = '';");
 
             js.ExecuteScript(
-                "document.getElementById('favoriteShiftUsers').value = arguments[0];",
-                new string('x', 101));
-            AssertValidationFails(js, "return buildRulesPayload();", "Пріоритетні працівники");
+                "document.getElementById('preferredShiftTypes').value = arguments[0];",
+                new string('x', 201));
+            AssertValidationFails(js, "return buildRulesPayload();", "Пріоритетні типи змін");
         }
         finally
         {

@@ -1,6 +1,6 @@
 {
   "Auth": {
-    "LoginUrl": "https://part-time.gymbeam.com/web/login",
+    "LoginUrl": "https://part-time.gymbeam.com/sk/web/login",
     "Login": "${GYMBEAM_AUTH_LOGIN}",
     "Password": "${GYMBEAM_AUTH_PASSWORD}",
     "SuccessUrlContains": "/news"
@@ -67,7 +67,10 @@
       "Monday",
       "Friday"
     ],
-    "FavoriteShiftUsers": [],
-    "TargetShiftDateTimes": []
+    "PreferredShiftTypes": [],
+    "TargetShiftDateTimes": [],
+    "ExcludedShiftTypes": [],
+    "PreferredLocations": [],
+    "ExcludedLocations": []
   }
 }

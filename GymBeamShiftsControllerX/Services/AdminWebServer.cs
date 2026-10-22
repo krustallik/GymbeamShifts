@@ -31,7 +31,10 @@ namespace GymBeamShiftsControllerX.Services
         public List<string> StartTimesToSkipOnWeekendsAndHolidays { get; set; } = new List<string>();
         public List<string> Holidays { get; set; } = new List<string>();
         public List<string> ExcludedDates { get; set; } = new List<string>();
-        public List<string> FavoriteShiftUsers { get; set; } = new List<string>();
+        public List<string> PreferredShiftTypes { get; set; } = new List<string>();
+        public List<string> ExcludedShiftTypes { get; set; } = new List<string>();
+        public List<string> PreferredLocations { get; set; } = new List<string>();
+        public List<string> ExcludedLocations { get; set; } = new List<string>();
         public List<string> TargetShiftDateTimes { get; set; } = new List<string>();
         public int ShiftMinHoursAhead { get; set; } = 48;
         public int WeekendOrHolidayMinHoursAhead { get; set; } = 28;
@@ -47,7 +50,10 @@ namespace GymBeamShiftsControllerX.Services
         public List<string> StartTimesToSkipOnWeekendsAndHolidays { get; set; } = new List<string>();
         public List<string> Holidays { get; set; } = new List<string>();
         public List<string> ExcludedDates { get; set; } = new List<string>();
-        public List<string> FavoriteShiftUsers { get; set; } = new List<string>();
+        public List<string> PreferredShiftTypes { get; set; } = new List<string>();
+        public List<string> ExcludedShiftTypes { get; set; } = new List<string>();
+        public List<string> PreferredLocations { get; set; } = new List<string>();
+        public List<string> ExcludedLocations { get; set; } = new List<string>();
         public List<string> TargetShiftDateTimes { get; set; } = new List<string>();
         public int ShiftMinHoursAhead { get; set; }
         public int WeekendOrHolidayMinHoursAhead { get; set; }
@@ -364,6 +370,14 @@ namespace GymBeamShiftsControllerX.Services
                     return;
                 }
 
+                if (new[] { update.PreferredShiftTypes, update.ExcludedShiftTypes,
+                    update.PreferredLocations, update.ExcludedLocations }.Any(values => values != null
+                        && (values.Count > 100 || values.Any(value => value == null || value.Length > 200))))
+                {
+                    WriteJson(context.Response, 400, new { error = "Списки місць і типів: максимум 100 назв по 200 символів." });
+                    return;
+                }
+
                 if (!AreValidTargetShiftDateTimes(update.TargetShiftDateTimes))
                 {
                     WriteJson(context.Response, 400, new
@@ -565,7 +579,10 @@ namespace GymBeamShiftsControllerX.Services
                 StartTimesToSkipOnWeekendsAndHolidays = rules.StartTimesToSkipOnWeekendsAndHolidays,
                 Holidays = rules.Holidays,
                 ExcludedDates = rules.ExcludedDates,
-                FavoriteShiftUsers = rules.FavoriteShiftUsers,
+                PreferredShiftTypes = rules.PreferredShiftTypes,
+                ExcludedShiftTypes = rules.ExcludedShiftTypes,
+                PreferredLocations = rules.PreferredLocations,
+                ExcludedLocations = rules.ExcludedLocations,
                 TargetShiftDateTimes = rules.TargetShiftDateTimes,
                 ShiftMinHoursAhead = _config.Timing.ShiftMinHoursAhead,
                 WeekendOrHolidayMinHoursAhead = _config.Timing.WeekendOrHolidayMinHoursAhead,
@@ -770,9 +787,9 @@ namespace GymBeamShiftsControllerX.Services
   <meta name='viewport' content='width=device-width,initial-scale=1' />
   <title>Керування ботом GymBeam</title>
   <style>
-    body { font-family: Arial, sans-serif; margin: 0; background: #111827; color: #e5e7eb; }
-    .container { max-width: 980px; margin: 24px auto; padding: 0 16px; }
-    .card { background: #1f2937; border-radius: 10px; padding: 16px; margin-bottom: 16px; }
+    body { font-family: Segoe UI, Arial, sans-serif; margin: 0; background: #101820; color: #e5e7eb; }
+    .container { width:94%; box-sizing:border-box; margin:28px auto; }
+    .card { background: #1b2733; border-radius: 10px; padding: 16px; margin-bottom: 16px; }
     h1, h2 { margin-top: 0; }
     label { display:block; margin: 10px 0 4px; }
     input, textarea, button { width:100%; box-sizing:border-box; border-radius: 8px; border: 1px solid #374151; background:#0b1220; color:#e5e7eb; padding:10px; }
@@ -787,8 +804,8 @@ namespace GymBeamShiftsControllerX.Services
     .time-scope-row code { color:#f9fafb; font-weight:bold; }
     .time-scope-row label { display:flex; align-items:center; gap:6px; margin:0; color:#cbd5e1; font-size:12px; cursor:pointer; }
     .time-scope-row input { margin:0; }
-    button { background: #2563eb; cursor: pointer; margin-top: 10px; }
-    button:hover { background:#1d4ed8; }
+    button { background: #df641e; cursor: pointer; margin-top: 10px; }
+    button:hover { background:#bd4c0c; }
     .grid { display:grid; gap:16px; grid-template-columns: 1fr 1fr; }
     .hidden { display:none; }
     .validation-error { color:#fca5a5; margin-top:10px; white-space:pre-wrap; }
@@ -806,6 +823,38 @@ namespace GymBeamShiftsControllerX.Services
     .validation-overlay[hidden] { display:none; }.validation-progress { width:min(430px,100%); padding:30px 24px; border:1px solid #3b82f6; border-radius:16px; background:#111827; box-shadow:0 24px 90px #000; text-align:center; }
     .spinner { width:54px; height:54px; margin:0 auto 20px; border:5px solid #374151; border-top-color:#3b82f6; border-radius:50%; animation:spin .8s linear infinite; }.validation-progress h2{margin:0 0 10px}.validation-progress p{margin:0;color:#cbd5e1;line-height:1.5}.validation-progress .wait-note{margin-top:12px;color:#93c5fd;font-size:13px}@keyframes spin{to{transform:rotate(360deg)}}@media(prefers-reduced-motion:reduce){.spinner{animation-duration:1.8s}}
     @media(max-width:700px){.grid,.time-rule-editor{grid-template-columns:1fr}.container{margin:16px auto}.help::after{left:12px;right:12px;bottom:12px;width:auto;max-height:calc(100vh - 24px);font-size:15px;transform:translateY(8px)}.help:hover::after,.help:focus::after{transform:translateY(0)}}
+    :root { color-scheme:dark; }
+    body { line-height:1.5; }
+    h1 { font-size:clamp(22px,2vw,32px); font-weight:650; letter-spacing:-.6px; }
+    h2 { font-size:21px; font-weight:600; }
+    h3 { margin:0 0 8px; font-size:18px; }
+    .card { border:1px solid #344454; padding:24px; }
+    .timing-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:20px; align-items:end; }
+    .grid { grid-template-columns:repeat(2,minmax(0,1fr)); gap:28px; }
+    .preferences-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:24px; margin:28px 0; }
+    .preference-panel { border-top:3px solid #df641e; padding:20px; background:#14202b; border-radius:4px; }
+    .field-note,.rule-note { color:#acbdcb; font-size:14px; max-width:78ch; }
+    .known-values { margin-top:16px; color:#acbdcb; font-size:13px; }
+    .known-values summary { cursor:pointer; color:#e7c1a5; }
+    .known-values ul { padding-left:20px; }
+    textarea { resize:vertical; line-height:1.6; min-height:90px; }
+    input:focus-visible,textarea:focus-visible,button:focus-visible,summary:focus-visible,.help:focus-visible { outline:2px solid #ffa660; outline-offset:3px; }
+    button { font-weight:600; min-height:44px; }
+    button:disabled { opacity:.6; cursor:wait; }
+    #loginCard { max-width:420px; margin:7vh auto; }
+    .status-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:20px; }
+    .status-item span { display:block; color:#acbdcb; font-size:13px; }
+    .status-item strong { display:block; font-size:20px; font-weight:600; margin-top:4px; }
+    .status-error { grid-column:1/-1; color:#fca5a5; overflow-wrap:anywhere; }
+    .save-bar { display:flex; align-items:center; gap:18px; flex-wrap:wrap; border-top:1px solid #344454; padding-top:16px; }
+    .save-bar button { width:auto; min-width:220px; margin:0; }
+    .save-bar .validation-error { margin:0; }
+    .success { color:#86efac; }
+    .logs-panel summary { cursor:pointer; font-size:18px; font-weight:600; }
+    .logs-panel button { width:auto; }
+    .logout-bar { display:flex; justify-content:flex-end; }.logout-bar button { width:auto; margin:0; }
+    @media(max-width:1100px){.timing-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+    @media(max-width:700px){.preferences-grid,.timing-grid,.status-grid{grid-template-columns:1fr}.container{width:94%}.card{padding:16px}.save-bar button{width:100%}.topbar{align-items:flex-start}.topbar button{flex-shrink:0}}
   </style>
 </head>
 <body>
@@ -814,9 +863,9 @@ namespace GymBeamShiftsControllerX.Services
 
     <div id='loginCard' class='card'>
       <h2>Вхід</h2>
-      <div class='label-row'><label>Ім’я користувача</label><span class='help' tabindex='0' data-tip='Логін для доступу до панелі керування цього бота. Це не логін від сайту GymBeam.'>?</span></div>
+      <div class='label-row'><label for='username'>Ім’я користувача</label><span class='help' tabindex='0' data-tip='Логін для доступу до панелі керування цього бота. Це не логін від сайту GymBeam.'>?</span></div>
       <input id='username' />
-      <div class='label-row'><label>Пароль</label><span class='help' tabindex='0' data-tip='Пароль адміністратора цього бота. Він використовується лише для входу в цю панель.'>?</span></div>
+      <div class='label-row'><label for='password'>Пароль</label><span class='help' tabindex='0' data-tip='Пароль адміністратора цього бота. Він використовується лише для входу в цю панель.'>?</span></div>
       <input id='password' type='password' />
       <button onclick='login()'>Увійти</button>
       <div id='loginError'></div>
@@ -825,27 +874,30 @@ namespace GymBeamShiftsControllerX.Services
     <div id='app' class='hidden'>
       <div class='card'>
         <h2>Стан бота <span class='help' tabindex='0' data-tip='Поточний технічний стан бота: чи він працює, кількість перевірок, час останньої успішної операції та остання помилка.'>?</span></h2>
-        <pre id='status'>Завантаження...</pre>
+        <div id='status' class='status-grid' aria-live='polite'>Завантаження...</div>
       </div>
 
       <div class='card'>
         <h2>Правила вибору змін</h2>
+        <p class='rule-note'>Часові правила перевіряють початок зміни за часом Словаччини. Заборони місць і типів діють для всіх дат.</p>
         <label class='checkbox-label'><input id='takeLunch' type='checkbox' /> Брати обід <span class='help' tabindex='0' data-tip='Визначає, чи бот обиратиме варіант зміни з обідньою перервою під час реєстрації.'>?</span></label>
-        <div class='label-row'><label>Мінімум годин до початку зміни</label><span class='help' tabindex='0' data-tip='Бот розглядатиме лише зміни, до початку яких залишилося не менше вказаної кількості годин за місцевим часом Словаччини. Значення є тривалістю, тому додавати різницю часових поясів вручну не потрібно. Допустиме значення: від 1 до 720.'>?</span></div>
-        <input id='shiftMinHoursAhead' type='number' min='1' max='720' step='1' required />
-        <div class='label-row'><label>Мінімум годин для вихідних і свят</label><span class='help' tabindex='0' data-tip='Окремий мінімальний запас часу для змін у суботу, неділю або дати зі списку свят. Розрахунок виконується за місцевим часом Словаччини; додавати 1 або 2 години вручну не потрібно. Допустиме значення: від 1 до 720 годин.'>?</span></div>
-        <input id='weekendOrHolidayMinHoursAhead' type='number' min='1' max='720' step='1' required />
-        <div class='label-row'><label>Кількість сповіщень про важливу зміну</label><span class='help' tabindex='0' data-tip='Скільки однакових Telegram-повідомлень надіслати, коли знайдена важлива зміна у вихідний або святковий день. Від 1 до 20.'>?</span></div>
-        <input id='importantShiftNotificationCount' type='number' min='1' max='20' step='1' required />
-        <div class='label-row'><label>Затримка між важливими сповіщеннями, мс</label><span class='help' tabindex='0' data-tip='Пауза в мілісекундах між повторними Telegram-сповіщеннями про важливу зміну. 1000 мс дорівнює 1 секунді. Від 0 до 600000.'>?</span></div>
-        <input id='importantShiftNotificationDelayMilliseconds' type='number' min='0' max='600000' step='1000' required />
-        <div class='label-row'><label>Дати й час вибраних змін, по одній у рядку</label><span class='help' tabindex='0' data-tip='Необов’язковий список. Введіть дату та точний час початку кожної зміни у форматі РРРР-ММ-ДД ГГ:ХХ, по одному значенню в рядку. Якщо бот побачить будь-яку з цих змін без кнопки «Prihlásiť», він повідомлятиме про неї в Telegram на кожній ітерації перевірки. Очистьте список, щоб вимкнути такі сповіщення.'>?</span></div>
+        <div class='timing-grid'>
+        <div class='field'><div class='label-row'><label for='shiftMinHoursAhead'>Мінімум годин до початку зміни</label><span class='help' tabindex='0' data-tip='Бот розглядатиме лише зміни, до початку яких залишилося не менше вказаної кількості годин за місцевим часом Словаччини. Значення є тривалістю, тому додавати різницю часових поясів вручну не потрібно. Допустиме значення: від 1 до 720.'>?</span></div>
+        <input id='shiftMinHoursAhead' type='number' min='1' max='720' step='1' required /></div>
+        <div class='field'><div class='label-row'><label for='weekendOrHolidayMinHoursAhead'>Мінімум годин для вихідних і свят</label><span class='help' tabindex='0' data-tip='Окремий мінімальний запас часу для змін у суботу, неділю або дати зі списку свят. Розрахунок виконується за місцевим часом Словаччини; додавати 1 або 2 години вручну не потрібно. Допустиме значення: від 1 до 720 годин.'>?</span></div>
+        <input id='weekendOrHolidayMinHoursAhead' type='number' min='1' max='720' step='1' required /></div>
+        <div class='field'><div class='label-row'><label for='importantShiftNotificationCount'>Кількість сповіщень про важливу зміну</label><span class='help' tabindex='0' data-tip='Скільки однакових Telegram-повідомлень надіслати, коли знайдена важлива зміна у вихідний або святковий день. Від 1 до 20.'>?</span></div>
+        <input id='importantShiftNotificationCount' type='number' min='1' max='20' step='1' required /></div>
+        <div class='field'><div class='label-row'><label for='importantShiftNotificationDelayMilliseconds'>Затримка між важливими сповіщеннями, мс</label><span class='help' tabindex='0' data-tip='Пауза в мілісекундах між повторними Telegram-сповіщеннями про важливу зміну. 1000 мс дорівнює 1 секунді. Від 0 до 600000.'>?</span></div>
+        <input id='importantShiftNotificationDelayMilliseconds' type='number' min='0' max='600000' step='1000' required /></div>
+        </div>
+        <div class='label-row'><label for='targetShiftDateTimes'>Дати й час вибраних змін, по одній у рядку</label><span class='help' tabindex='0' data-tip='Необов’язковий список. Введіть дату та точний час початку кожної зміни у форматі РРРР-ММ-ДД ГГ:ХХ, по одному значенню в рядку. Якщо бот побачить будь-яку з цих змін без кнопки «Prihlásiť», він повідомлятиме про неї в Telegram на кожній ітерації перевірки. Очистьте список, щоб вимкнути такі сповіщення.'>?</span></div>
         <textarea id='targetShiftDateTimes' rows='5' placeholder='2026-08-22 06:00'></textarea>
         <div class='grid'>
           <div>
-            <div class='label-row'><label>Дозволені дні тижня, по одному в рядку</label><span class='help' tabindex='0' data-tip='Дні тижня, у які бот може брати зміни. Вводьте англійські назви Monday–Sunday, оскільки їх очікує система GymBeam.'>?</span></div>
+            <div class='label-row'><label for='includedWeekdays'>Дозволені дні тижня, по одному в рядку</label><span class='help' tabindex='0' data-tip='Дні тижня, у які бот може брати зміни. Вводьте англійські назви Monday–Sunday, оскільки їх очікує система GymBeam.'>?</span></div>
             <textarea id='includedWeekdays' rows='6'></textarea>
-            <div class='label-row'><label>Час початку, який треба пропускати</label><span class='help' tabindex='0' data-tip='Кожне значення вводьте з нового рядка у форматі HH:mm. Для кожного часу праворуч з’явиться чекбокс. Якщо його позначити, цей час блокуватиме зміни також у суботу, неділю та святкові дати. Без позначки фільтр діє лише у звичайні будні.'>?</span></div>
+            <div class='label-row'><label for='startTimesToSkip'>Час початку, який треба пропускати (±30 хв)</label><span class='help' tabindex='0' data-tip='Кожне значення вводьте з нового рядка у форматі HH:mm. Бот пропускає початок у межах ±30 хвилин включно: 14:00 блокує 13:30–14:30. Правило працює і через північ. Для кожного часу праворуч з’явиться чекбокс. Якщо його позначити, цей час блокуватиме зміни також у суботу, неділю та святкові дати. Без позначки фільтр діє лише у звичайні будні.'>?</span></div>
             <div class='time-rule-editor'>
               <textarea id='startTimesToSkip' rows='7' oninput='renderStartTimeScopeOptions()'></textarea>
               <div class='time-scope-panel'>
@@ -853,22 +905,22 @@ namespace GymBeamShiftsControllerX.Services
                 <div id='startTimeScopeOptions' class='time-scope-list' aria-live='polite'></div>
               </div>
             </div>
-            <div class='label-row'><label>Пріоритетні працівники, по одному в рядку</label><span class='help' tabindex='0' data-tip='Якщо на одну дату доступно кілька змін, бот спочатку спробує вибрати зміну працівника з цього списку. Вказуйте ім’я так, як воно показане на сайті.'>?</span></div>
-            <textarea id='favoriteShiftUsers' rows='6'></textarea>
           </div>
           <div>
-            <div class='label-row'><label>Святкові дати у форматі РРРР-ММ-ДД</label><span class='help' tabindex='0' data-tip='Ці дати бот вважатиме святковими та застосує до них окремий мінімальний запас годин і посилені Telegram-сповіщення.'>?</span></div>
+            <div class='label-row'><label for='holidays'>Святкові дати у форматі РРРР-ММ-ДД</label><span class='help' tabindex='0' data-tip='Ці дати бот вважатиме святковими та застосує до них окремий мінімальний запас годин і посилені Telegram-сповіщення.'>?</span></div>
             <textarea id='holidays' rows='6'></textarea>
-            <div class='label-row'><label>Виключені дати у форматі РРРР-ММ-ДД</label><span class='help' tabindex='0' data-tip='У ці дати бот повністю ігноруватиме всі доступні зміни та не намагатиметься на них зареєструватися.'>?</span></div>
+            <div class='label-row'><label for='excludedDates'>Виключені дати у форматі РРРР-ММ-ДД</label><span class='help' tabindex='0' data-tip='У ці дати бот повністю ігноруватиме всі доступні зміни та не намагатиметься на них зареєструватися.'>?</span></div>
             <textarea id='excludedDates' rows='6'></textarea>
           </div>
         </div>
-        <button onclick='saveRules()'>Зберегти правила</button>
-        <div id='rulesError' class='validation-error' role='alert'></div>
+        <div class='preferences-grid'><section class='preference-panel'><h3>Типи змін</h3><p class='field-note'>Колонка Typ zmeny. Одна повна назва на рядок.</p><div class='label-row'><label for='preferredShiftTypes'>Пріоритетні типи змін</label><span class='help' tabindex='0' data-tip='Перший рядок має найвищий пріоритет. Інші дозволені зміни також можна брати. Пріоритет типу важливіший за місце; порядок застосовується в межах однієї дати.'>?</span></div><textarea id='preferredShiftTypes' rows='4' placeholder='B2B - CTP2'></textarea><div class='label-row'><label for='excludedShiftTypes'>Типи змін, які не брати</label><span class='help' tabindex='0' data-tip='Бот пропускає зміни з цими значеннями. Заборона важливіша за будь-який пріоритет. Порожній список нічого не забороняє.'>?</span></div><textarea id='excludedShiftTypes' rows='4'></textarea><details class='known-values'><summary>Приклади назв із сайту</summary><ul><li>B2B - CTP2</li><li>CTP2 Export</li><li>IMPORT Letisko WHS, Bahýľová1704</li><li>Medzizmena EXPORT</li><li>Olepovanie B2B</li><li>RAS príjem tovaru</li><li>RAS Výroba</li><li>Vrátené/výmenné balíky</li></ul></details></section><section class='preference-panel'><h3>Місця роботи</h3><p class='field-note'>Колонка Miesto. Одна повна назва на рядок.</p><div class='label-row'><label for='preferredLocations'>Пріоритетні місця</label><span class='help' tabindex='0' data-tip='Перший рядок має найвищий пріоритет. Інші дозволені зміни також можна брати. Пріоритет типу важливіший за місце; порядок застосовується в межах однієї дати.'>?</span></div><textarea id='preferredLocations' rows='4' placeholder='CTP2 - whs - letisko'></textarea><div class='label-row'><label for='excludedLocations'>Місця, які не брати</label><span class='help' tabindex='0' data-tip='Бот пропускає зміни з цими значеннями. Заборона важливіша за будь-який пріоритет. Порожній список нічого не забороняє.'>?</span></div><textarea id='excludedLocations' rows='4'></textarea><details class='known-values'><summary>Приклади назв із сайту</summary><ul><li>CTP2 - whs - letisko</li><li>Rastislavova</li></ul></details></section></div>
+        <p class='field-note'>Порожні пріоритети зберігають черговість сайту. Назви порівнюються без урахування регістру й зайвих пробілів.</p>
+        <div class='save-bar'><button id='rulesSaveButton' onclick='saveRules()'>Зберегти правила</button><div id='rulesError' class='validation-error' role='status' aria-live='polite'></div></div>
       </div>
 
-      <div class='card'>
-        <button onclick='logout()'>Вийти</button>
+      <details class='card logs-panel' ontoggle='if(this.open) loadLogs()'><summary>Журнал роботи за сьогодні</summary><button class='secondary' onclick='loadLogs()'>Оновити журнал</button><pre id='logs'>Відкрийте журнал для завантаження.</pre></details>
+      <div class='logout-bar'>
+        <button class='secondary' onclick='logout()'>Вийти</button>
       </div>
     </div>
   </div>
@@ -877,10 +929,10 @@ namespace GymBeamShiftsControllerX.Services
       <h2>Налаштування підключень <span class='help' tabindex='0' data-tip='Як налаштувати Telegram: 1) відкрийте офіційний чат @BotFather; 2) надішліть /newbot і виконайте його інструкції; 3) скопіюйте створений токен; 4) знайдіть свого нового бота в Telegram і надішліть йому /start; 5) відкрийте в браузері https://api.telegram.org/botВАШ_ТОКЕН/getUpdates, замінивши ВАШ_ТОКЕН на отриманий токен; 6) знайдіть число в result → message → chat → id; 7) вставте токен і Chat ID у поля нижче та натисніть «Зберегти». Нікому не передавайте токен: він дає доступ до керування ботом.'>?</span></h2>
       <p class='settings-note'>Порожнє поле залишає поточне значення без змін. Збережені паролі й токени ніколи не показуються.</p>
       <div id='credentialsState' class='settings-note'></div>
-      <div class='label-row'><label>Логін GymBeam</label><span class='help' tabindex='0' data-tip='Логін вашого облікового запису на сайті part-time GymBeam.'>?</span></div><input id='gymBeamLogin' autocomplete='username'>
-      <div class='label-row'><label>Пароль GymBeam</label><span class='help' tabindex='0' data-tip='Пароль вашого облікового запису GymBeam. Він потрібен боту для автоматичного входу.'>?</span></div><input id='gymBeamPassword' type='password' autocomplete='new-password'>
-      <div class='label-row'><label>Токен Telegram-бота</label><span class='help' tabindex='0' data-tip='Відкрийте офіційного @BotFather у Telegram, надішліть команду /newbot, задайте ім’я та username нового бота. BotFather надішле довгий токен на зразок 123456789:ABC... Скопіюйте його сюди. Потім обов’язково знайдіть створеного бота і надішліть йому /start.'>?</span></div><input id='telegramBotToken' type='password' autocomplete='new-password'>
-      <div class='label-row'><label>Telegram Chat ID</label><span class='help' tabindex='0' data-tip='Спочатку знайдіть створеного бота в Telegram і надішліть йому /start. Потім відкрийте в браузері https://api.telegram.org/botВАШ_ТОКЕН/getUpdates, замінивши ВАШ_ТОКЕН на токен від @BotFather. У відповіді знайдіть result → message → chat → id і скопіюйте число з поля id. Якщо result порожній, надішліть боту ще одне повідомлення та оновіть сторінку. Не показуйте нікому URL із токеном.'>?</span></div><input id='telegramChatId' autocomplete='off'>
+      <div class='label-row'><label for='gymBeamLogin'>Логін GymBeam</label><span class='help' tabindex='0' data-tip='Логін вашого облікового запису на сайті part-time GymBeam.'>?</span></div><input id='gymBeamLogin' autocomplete='username'>
+      <div class='label-row'><label for='gymBeamPassword'>Пароль GymBeam</label><span class='help' tabindex='0' data-tip='Пароль вашого облікового запису GymBeam. Він потрібен боту для автоматичного входу.'>?</span></div><input id='gymBeamPassword' type='password' autocomplete='new-password'>
+      <div class='label-row'><label for='telegramBotToken'>Токен Telegram-бота</label><span class='help' tabindex='0' data-tip='Відкрийте офіційного @BotFather у Telegram, надішліть команду /newbot, задайте ім’я та username нового бота. BotFather надішле довгий токен на зразок 123456789:ABC... Скопіюйте його сюди. Потім обов’язково знайдіть створеного бота і надішліть йому /start.'>?</span></div><input id='telegramBotToken' type='password' autocomplete='new-password'>
+      <div class='label-row'><label for='telegramChatId'>Telegram Chat ID</label><span class='help' tabindex='0' data-tip='Спочатку знайдіть створеного бота в Telegram і надішліть йому /start. Потім відкрийте в браузері https://api.telegram.org/botВАШ_ТОКЕН/getUpdates, замінивши ВАШ_ТОКЕН на токен від @BotFather. У відповіді знайдіть result → message → chat → id і скопіюйте число з поля id. Якщо result порожній, надішліть боту ще одне повідомлення та оновіть сторінку. Не показуйте нікому URL із токеном.'>?</span></div><input id='telegramChatId' autocomplete='off'>
       <div id='credentialsError' class='validation-error' role='alert'></div>
       <div id='credentialsValidation' class='settings-note' role='status' aria-live='polite'></div>
       <div class='dialog-actions'><button type='button' class='secondary' onclick='closeSettings()'>Скасувати</button><button type='submit'>Зберегти</button></div>
@@ -986,7 +1038,7 @@ namespace GymBeamShiftsControllerX.Services
         row.className = 'time-scope-row';
 
         const timeLabel = document.createElement('code');
-        timeLabel.textContent = time;
+        timeLabel.textContent = `${time} ±30 хв`;
 
         const checkboxLabel = document.createElement('label');
         const checkbox = document.createElement('input');
@@ -1020,11 +1072,16 @@ namespace GymBeamShiftsControllerX.Services
         'Час початку, який треба пропускати',
         isValidTime,
         'час у форматі HH:mm (00:00–23:59)');
-      const favoriteShiftUsers = validateList(
-        linesToArray(document.getElementById('favoriteShiftUsers').value),
-        'Пріоритетні працівники',
-        value => value.length <= 100,
-        'ім’я довжиною до 100 символів');
+      const preferenceLists = {};
+      const preferenceLabels = {
+        preferredShiftTypes: 'Пріоритетні типи змін', excludedShiftTypes: 'Типи змін, які не брати',
+        preferredLocations: 'Пріоритетні місця', excludedLocations: 'Місця, які не брати'
+      };
+      for (const [id, label] of Object.entries(preferenceLabels)) {
+        const values = linesToArray(document.getElementById(id).value);
+        if (values.length > 100) throw new Error(`${label}: максимум 100 рядків.`);
+        preferenceLists[id] = validateList(values, label, value => value.length <= 200, 'назва довжиною до 200 символів');
+      }
       const holidays = validateList(
         linesToArray(document.getElementById('holidays').value),
         'Святкові дати',
@@ -1053,7 +1110,7 @@ namespace GymBeamShiftsControllerX.Services
         startTimesToSkip,
         startTimesToSkipOnWeekendsAndHolidays: startTimesToSkip.filter(
           value => startTimesToSkipOnWeekendsAndHolidays.has(value)),
-        favoriteShiftUsers,
+        ...preferenceLists,
         holidays,
         excludedDates
       };
@@ -1083,7 +1140,24 @@ namespace GymBeamShiftsControllerX.Services
 
     async function loadStatus() {
       const status = await api('/api/status');
-      document.getElementById('status').innerText = JSON.stringify(status, null, 2);
+      const container = document.getElementById('status');
+      container.replaceChildren();
+      const items = [
+        ['Стан', status.isRunning ? 'Працює' : 'Зупинено'],
+        ['Перевірок', String(status.totalIterations ?? 0)],
+        ['Час роботи', status.uptime || '—'],
+        ['Остання успішна перевірка', status.lastSuccessAt || 'Ще не було']
+      ];
+      for (const [label, value] of items) {
+        const item = document.createElement('div'); item.className = 'status-item';
+        const caption = document.createElement('span'); caption.textContent = label;
+        const content = document.createElement('strong'); content.textContent = value;
+        item.append(caption, content); container.appendChild(item);
+      }
+      if (status.lastErrorMessage) {
+        const error = document.createElement('div'); error.className = 'status-error';
+        error.textContent = `Остання помилка: ${status.lastErrorMessage}`; container.appendChild(error);
+      }
     }
 
     async function loadRules() {
@@ -1100,7 +1174,9 @@ namespace GymBeamShiftsControllerX.Services
       startTimesToSkipOnWeekendsAndHolidays = new Set(
         rules.startTimesToSkipOnWeekendsAndHolidays ?? []);
       renderStartTimeScopeOptions();
-      document.getElementById('favoriteShiftUsers').value = arrayToLines(rules.favoriteShiftUsers);
+      for (const id of ['preferredShiftTypes', 'excludedShiftTypes', 'preferredLocations', 'excludedLocations']) {
+        document.getElementById(id).value = arrayToLines(rules[id]);
+      }
       document.getElementById('holidays').value = arrayToLines(rules.holidays);
       document.getElementById('excludedDates').value = arrayToLines(rules.excludedDates);
     }
@@ -1108,14 +1184,26 @@ namespace GymBeamShiftsControllerX.Services
     async function saveRules() {
       const errorElement = document.getElementById('rulesError');
       errorElement.innerText = '';
+      errorElement.className = 'validation-error';
+      const button = document.getElementById('rulesSaveButton');
+      button.disabled = true;
       try {
         const payload = buildRulesPayload();
         await api('/api/shift-rules', { method: 'PUT', body: JSON.stringify(payload) });
         await loadRules();
-        alert('Правила збережено');
+        errorElement.className = 'success';
+        errorElement.innerText = 'Правила збережено.';
       } catch (e) {
         errorElement.innerText = e.message;
-      }
+      } finally { button.disabled = false; }
+    }
+
+    async function loadLogs() {
+      const element = document.getElementById('logs');
+      try {
+        const result = await api('/api/logs/today?limit=200');
+        element.textContent = result.lines.length ? result.lines.join('\n') : 'Сьогодні записів ще немає.';
+      } catch (error) { element.textContent = error.message; }
     }
 
     async function openSettings() {

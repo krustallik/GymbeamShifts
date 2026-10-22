@@ -239,6 +239,38 @@ public class ShiftCheckerEligibilityTests
         Assert.True(InvokeIsRelevant(other));
     }
 
+    [Theory]
+    [InlineData("2026-06-19", "14:02", false, false, false)]
+    [InlineData("2026-06-19", "13:30", false, false, false)]
+    [InlineData("2026-06-19", "14:30", false, false, false)]
+    [InlineData("2026-06-19", "14:31", false, false, true)]
+    [InlineData("2026-06-20", "14:02", false, false, true)]
+    [InlineData("2026-06-20", "14:02", false, true, false)]
+    [InlineData("2026-06-17", "14:02", true, false, true)]
+    [InlineData("2026-06-17", "14:02", true, true, false)]
+    public void StartTimeWindow_UsesConfiguredCenterAndPreservesWeekendHolidayScope(
+        string dateText, string start, bool holiday, bool selectedForWeekend, bool expected)
+    {
+        var date = DateTime.ParseExact(dateText, "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
+        var shift = CreateEligibleShift(date, start);
+        Assert.Equal(expected, InvokeIsRelevant(shift,
+            holidays: holiday ? new() { date } : new(),
+            includedWeekdays: new() { date.DayOfWeek },
+            startTimesToSkip: new() { "14:00", "22:00" },
+            startTimesToSkipOnWeekendsAndHolidays: selectedForWeekend ? new() { "14:00" } : new() { "22:00" }));
+    }
+
+    [Fact]
+    public void OverlappingWindows_OnlySelectedCentersApplyOnWeekend()
+    {
+        var shift = CreateEligibleShift(new DateTime(2026, 6, 20), "13:40");
+        Assert.True(InvokeIsRelevant(shift, startTimesToSkip: new() { "14:00", "14:15" },
+            startTimesToSkipOnWeekendsAndHolidays: new() { "14:15" }));
+        shift.TimeFrom = "13:45";
+        Assert.False(InvokeIsRelevant(shift, startTimesToSkip: new() { "14:00", "14:15" },
+            startTimesToSkipOnWeekendsAndHolidays: new() { "14:15" }));
+    }
+
     private static bool InvokeIsRelevant(
         ShiftEntry shift,
         HashSet<DateTime>? holidays = null,
@@ -276,7 +308,7 @@ public class ShiftCheckerEligibilityTests
             Date = date,
             TimeFrom = timeFrom,
             TimeTo = "22:00",
-            UserId = userId,
+            ShiftType = userId,
             ButtonElement = button!
         };
     }

@@ -353,7 +353,7 @@ public class AdminWebServerPrivateLogicTests
     }
 
     [Fact]
-    public void BuildShiftRulesApiResponse_IncludesFavoriteShiftUsersAndShiftMinHoursAhead()
+    public void BuildShiftRulesApiResponse_IncludesPreferredShiftTypesAndShiftMinHoursAhead()
     {
         var cfg = new AppConfig
         {
@@ -370,7 +370,7 @@ public class AdminWebServerPrivateLogicTests
                 IncludedWeekdays = new List<string> { "Monday" },
                 StartTimesToSkip = new List<string> { "22:00" },
                 StartTimesToSkipOnWeekendsAndHolidays = new List<string> { "22:00" },
-                FavoriteShiftUsers = new List<string> { "Andrea Pavlíková" },
+                PreferredShiftTypes = new List<string> { "Andrea Pavlíková" },
                 TargetShiftDateTimes = new List<string>
                 {
                     "2026-08-25T08:00",
@@ -389,7 +389,7 @@ public class AdminWebServerPrivateLogicTests
         Assert.Equal(6, response.ImportantShiftNotificationCount);
         Assert.Equal(45000, response.ImportantShiftNotificationDelayMilliseconds);
         Assert.Equal(new[] { "22:00" }, response.StartTimesToSkipOnWeekendsAndHolidays);
-        Assert.Equal(new[] { "Andrea Pavlíková" }, response.FavoriteShiftUsers);
+        Assert.Equal(new[] { "Andrea Pavlíková" }, response.PreferredShiftTypes);
         Assert.Equal(
             new[] { "2026-08-25T08:00", "2026-08-26T09:30" },
             response.TargetShiftDateTimes);

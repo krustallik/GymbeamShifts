@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using OpenQA.Selenium;
 
 namespace GymBeamShiftsControllerX.Models
@@ -8,7 +8,8 @@ namespace GymBeamShiftsControllerX.Models
         public DateTime Date { get; set; }
         public string TimeFrom { get; set; } = null!;
         public string TimeTo { get; set; } = null!;
-        public string UserId { get; set; } = null!;
+        public string Location { get; set; } = string.Empty;
+        public string ShiftType { get; set; } = string.Empty;
         public string ShiftIdentifier { get; set; } = string.Empty;
         public int PageNumber { get; set; } = 1;
         public IWebElement? ButtonElement { get; set; }

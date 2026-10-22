@@ -38,7 +38,10 @@ namespace GymBeamShiftsControllerX.Services
                         startTimesToSkip),
                     Holidays = CleanList(update.Holidays),
                     ExcludedDates = CleanList(update.ExcludedDates),
-                    FavoriteShiftUsers = CleanList(update.FavoriteShiftUsers),
+                    PreferredShiftTypes = CleanList(update.PreferredShiftTypes),
+                    ExcludedShiftTypes = CleanList(update.ExcludedShiftTypes),
+                    PreferredLocations = CleanList(update.PreferredLocations),
+                    ExcludedLocations = CleanList(update.ExcludedLocations),
                     TargetShiftDateTimes = CleanTargetShiftDateTimes(update.TargetShiftDateTimes)
                 };
 
@@ -69,7 +72,10 @@ namespace GymBeamShiftsControllerX.Services
                     source.StartTimesToSkipOnWeekendsAndHolidays ?? new List<string>()),
                 Holidays = new List<string>(source.Holidays ?? new List<string>()),
                 ExcludedDates = new List<string>(source.ExcludedDates ?? new List<string>()),
-                FavoriteShiftUsers = new List<string>(source.FavoriteShiftUsers ?? new List<string>()),
+                PreferredShiftTypes = new List<string>(source.PreferredShiftTypes ?? new List<string>()),
+                ExcludedShiftTypes = new List<string>(source.ExcludedShiftTypes ?? new List<string>()),
+                PreferredLocations = new List<string>(source.PreferredLocations ?? new List<string>()),
+                ExcludedLocations = new List<string>(source.ExcludedLocations ?? new List<string>()),
                 TargetShiftDateTimes = CleanTargetShiftDateTimes(targetShiftDateTimes)
             };
         }
@@ -90,7 +96,7 @@ namespace GymBeamShiftsControllerX.Services
                     continue;
                 }
 
-                var trimmed = value.Trim();
+                var trimmed = ShiftPreferences.Normalize(value);
                 if (set.Add(trimmed))
                 {
                     result.Add(trimmed);

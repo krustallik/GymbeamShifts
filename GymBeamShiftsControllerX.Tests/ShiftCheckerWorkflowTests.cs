@@ -53,7 +53,7 @@ public sealed class ShiftCheckerWorkflowTests : IDisposable
     }
 
     [Fact]
-    public void CheckForShifts_ClicksFavoriteUserFirstForSameDate()
+    public void CheckForShifts_ClicksPreferredTypeFirstForSameDate()
     {
         DateTime shiftDate = GetFutureSaturday();
         string rows =
@@ -62,7 +62,7 @@ public sealed class ShiftCheckerWorkflowTests : IDisposable
         NavigateToScenario(CreateScenarioHtml(rows));
         var checker = CreateChecker(
             takeLunch: false,
-            favoriteUsers: new List<string> { "Favorite User" });
+            preferredTypes: new List<string> { "Favorite User" });
 
         checker.CheckForShifts();
 
@@ -116,11 +116,11 @@ public sealed class ShiftCheckerWorkflowTests : IDisposable
         string saturdayText = saturday.ToString("dd.MM.yyyy", CultureInfo.InvariantCulture);
         string rows = $$"""
             <tr><td>too few cells</td></tr>
-            <tr><td>not-a-date</td><td>23:00</td><td>23:30</td><td>Bad date</td><td><button class='subscribe_shift'>Join</button></td></tr>
+            <tr><td>not-a-date</td><td>23:00 - 23:30</td><td>Rastislavova</td><td>Bad date</td><td><button class='subscribe_shift'>Join</button></td></tr>
             {{CreateShiftRow(saturday, "21:45", "Skipped time")}}
             {{CreateShiftRow(saturday, "22:00", "Excluded date")}}
             {{CreateShiftRow(plainWeekday, "23:00", "Plain weekday")}}
-            <tr><td>{{saturdayText}}</td><td>23:00</td><td>23:30</td><td>No button</td><td></td></tr>
+            <tr><td>{{saturdayText}}</td><td>23:00 - 23:30</td><td>Rastislavova</td><td>No button</td><td></td></tr>
             """;
         NavigateToScenario(CreateScenarioHtml(rows));
         var checker = CreateChecker(
@@ -212,7 +212,7 @@ public sealed class ShiftCheckerWorkflowTests : IDisposable
         NavigateToScenario(CreatePaginatedScenarioHtml(pages));
         var checker = CreateChecker(
             takeLunch: false,
-            favoriteUsers: new List<string> { "Page 5 Favorite", "Page 6 Ignored" });
+            preferredTypes: new List<string> { "Page 5 Favorite", "Page 6 Ignored" });
 
         checker.CheckForShifts();
 
@@ -236,7 +236,7 @@ public sealed class ShiftCheckerWorkflowTests : IDisposable
         NavigateToScenario(CreatePaginatedScenarioHtml(pages));
         var checker = CreateChecker(
             takeLunch: true,
-            favoriteUsers: new List<string> { "Page 2 Favorite" });
+            preferredTypes: new List<string> { "Page 2 Favorite" });
 
         checker.CheckForShifts();
 
@@ -254,8 +254,8 @@ public sealed class ShiftCheckerWorkflowTests : IDisposable
         DateTime shiftDate = GetFutureSaturday();
         string dateText = shiftDate.ToString("dd.MM.yyyy", CultureInfo.InvariantCulture);
         string rows =
-            $"<tr><td>{dateText}</td><td>08:00</td><td>16:00</td><td>Target User</td><td></td></tr>" +
-            $"<tr><td>{dateText}</td><td>09:30</td><td>17:30</td><td>Second Target</td><td></td></tr>";
+            $"<tr><td>{dateText}</td><td>08:00 - 16:00</td><td>Rastislavova</td><td>Target User</td><td></td></tr>" +
+            $"<tr><td>{dateText}</td><td>09:30 - 17:30</td><td>Rastislavova</td><td>Second Target</td><td></td></tr>";
         string scenario = CreateScenarioHtml(rows);
         var messages = new List<string>();
         NavigateToScenario(scenario);
@@ -305,7 +305,7 @@ public sealed class ShiftCheckerWorkflowTests : IDisposable
     {
         DateTime shiftDate = GetFutureSaturday();
         string dateText = shiftDate.ToString("dd.MM.yyyy", CultureInfo.InvariantCulture);
-        string rows = $"<tr><td>{dateText}</td><td>08:00</td><td>16:00</td><td>Other shift</td><td></td></tr>";
+        string rows = $"<tr><td>{dateText}</td><td>08:00 - 16:00</td><td>Rastislavova</td><td>Other shift</td><td></td></tr>";
         var messages = new List<string>();
         NavigateToScenario(CreateScenarioHtml(rows));
         var checker = CreateChecker(
@@ -336,14 +336,99 @@ public sealed class ShiftCheckerWorkflowTests : IDisposable
         Assert.Contains("Зміну знайдено та успішно обрано", message);
         Assert.Contains($"Дата: {shiftDate:dd.MM.yyyy}", message);
         Assert.Contains("Час: 23:00-23:30", message);
-        Assert.Contains("Працівник: Successful User", message);
+        Assert.Contains("Тип зміни: Successful User", message);
         Assert.DoesNotContain("Shift found:", message);
+    }
+
+    [Fact]
+    public void ParseCurrentPage_ReadsAllNewColumnsAndEveryProvidedTimeRange()
+    {
+        DateTime date = GetFutureSaturday();
+        string[] ranges = { "06:00 - 14:00", "06:00 - 14:01", "06:00 - 14:15", "08:00 - 16:00",
+            "10:00 - 18:00", "14:00 - 22:00", "14:01 - 22:00", "14:02 - 22:00", "16:00 - 22:00", "22:00 - 06:00" };
+        string rows = string.Join("", ranges.Select((range, index) =>
+        {
+            var parts = range.Split(" - ");
+            return CreateShiftRow(date, parts[0], "CTP2 Export", $"range-{index}", "CTP2 - whs - letisko", parts[1]);
+        }));
+        rows += $"<tr><td>{date:dd.MM.yyyy}</td><td>25:00 - 06:00</td><td>Rastislavova</td><td>Invalid</td><td></td></tr>";
+        NavigateToScenario(CreateScenarioHtml(rows));
+        var parsed = (List<ShiftEntry>)ReflectionTestHelper.GetStaticMethod(typeof(ShiftChecker), "ParseCurrentPage")
+            .Invoke(null, new object[] { _driver, 3 })!;
+        Assert.Equal(ranges.Length, parsed.Count);
+        for (int index = 0; index < ranges.Length; index++)
+        {
+            var parts = ranges[index].Split(" - ");
+            Assert.Equal(parts[0], parsed[index].TimeFrom);
+            Assert.Equal(parts[1], parsed[index].TimeTo);
+            Assert.Equal("CTP2 - whs - letisko", parsed[index].Location);
+            Assert.Equal("CTP2 Export", parsed[index].ShiftType);
+            Assert.Equal($"range-{index}", parsed[index].ShiftIdentifier);
+            Assert.Equal(3, parsed[index].PageNumber);
+        }
+    }
+
+    [Fact]
+    public void CheckForShifts_ExclusionsOverrideBothPreferences()
+    {
+        DateTime date = GetFutureSaturday();
+        string rows = CreateShiftRow(date, "14:00", "CTP2 Export", "blocked-type")
+            + CreateShiftRow(date, "14:01", "RAS Výroba", "blocked-place", "CTP2 - whs - letisko")
+            + CreateShiftRow(date, "14:02", "RAS Výroba", "allowed");
+        NavigateToScenario(CreateScenarioHtml(rows));
+        CreateChecker(false,
+            preferredTypes: new() { "CTP2 Export", "RAS Výroba" },
+            preferredLocations: new() { "CTP2 - whs - letisko", "Rastislavova" },
+            excludedTypes: new() { " ctp2  EXPORT " },
+            excludedLocations: new() { "CTP2 - whs - letisko" }).CheckForShifts();
+        Assert.Equal("allowed", _driver.ExecuteScript("return sessionStorage.getItem('selectedShift')"));
+    }
+
+    [Fact]
+    public void CheckForShifts_LocationBreaksTiesWithinSameType()
+    {
+        DateTime date = GetFutureSaturday();
+        string rows = CreateShiftRow(date, "14:00", "CTP2 Export", "other-place", "CTP2 - whs - letisko")
+            + CreateShiftRow(date, "14:01", "CTP2 Export", "preferred-place");
+        NavigateToScenario(CreateScenarioHtml(rows));
+        CreateChecker(false, preferredTypes: new() { "CTP2 Export" },
+            preferredLocations: new() { "Rastislavova" }).CheckForShifts();
+        Assert.Equal("preferred-place", _driver.ExecuteScript("return sessionStorage.getItem('selectedShift')"));
+    }
+
+    [Fact]
+    public void CheckForShifts_TimeSkipCoversThirtyMinuteWindowOnParsedRange()
+    {
+        DateTime date = GetFutureSaturday();
+        string rows = CreateShiftRow(date, "14:00", "CTP2 Export", "blocked-start", timeTo: "22:00")
+            + CreateShiftRow(date, "14:01", "CTP2 Export", "blocked-minute", timeTo: "22:00")
+            + CreateShiftRow(date, "14:30", "CTP2 Export", "blocked-boundary", timeTo: "22:00")
+            + CreateShiftRow(date, "14:31", "CTP2 Export", "allowed-minute", timeTo: "22:00");
+        NavigateToScenario(CreateScenarioHtml(rows));
+        CreateChecker(false, startTimesToSkip: new() { "14:00" }, weekendStartTimes: new() { "14:00" })
+            .CheckForShifts();
+        Assert.Equal("allowed-minute", _driver.ExecuteScript("return sessionStorage.getItem('selectedShift')"));
+    }
+
+    [Fact]
+    public void VisiblePortalModal_RejectsMismatchedRecordBeforeConfirmation()
+    {
+        NavigateToScenario("<div id='modal_subscribe'><input name='record_id' value='other'><p>Visible modal</p></div>");
+        var error = Assert.Throws<TargetInvocationException>(() =>
+            ReflectionTestHelper.GetStaticMethod(typeof(ShiftChecker), "WaitForPortalModal").Invoke(null,
+                new object[] { _driver, new OpenQA.Selenium.Support.UI.WebDriverWait(_driver, TimeSpan.FromSeconds(2)),
+                    "modal_subscribe", "expected-record" }));
+        Assert.IsType<InvalidOperationException>(error.InnerException);
     }
 
     private ShiftChecker CreateChecker(
         bool takeLunch,
-        List<string>? favoriteUsers = null,
+        List<string>? preferredTypes = null,
+        List<string>? preferredLocations = null,
+        List<string>? excludedTypes = null,
+        List<string>? excludedLocations = null,
         List<string>? startTimesToSkip = null,
+        List<string>? weekendStartTimes = null,
         List<string>? excludedDates = null,
         List<string>? holidays = null,
         List<string>? includedWeekdays = null,
@@ -365,8 +450,12 @@ public sealed class ShiftCheckerWorkflowTests : IDisposable
             ShiftRules = new ShiftRulesSettings
             {
                 TakeLunch = takeLunch,
-                FavoriteShiftUsers = favoriteUsers ?? new List<string>(),
+                PreferredShiftTypes = preferredTypes ?? new List<string>(),
+                PreferredLocations = preferredLocations ?? new List<string>(),
+                ExcludedShiftTypes = excludedTypes ?? new List<string>(),
+                ExcludedLocations = excludedLocations ?? new List<string>(),
                 StartTimesToSkip = startTimesToSkip ?? new List<string>(),
+                StartTimesToSkipOnWeekendsAndHolidays = weekendStartTimes ?? new List<string>(),
                 ExcludedDates = excludedDates ?? new List<string>(),
                 Holidays = holidays ?? new List<string>(),
                 IncludedWeekdays = includedWeekdays ?? new List<string>(),
@@ -405,7 +494,7 @@ public sealed class ShiftCheckerWorkflowTests : IDisposable
               <button id='cookies-consent-essential' onclick='this.remove()'>Accept cookies</button>
               <select name='invitations_table_length'><option value='100'>100</option></select>
               <table id='invitations_table'>
-                <thead><tr><th>User</th><th>Od</th></tr></thead>
+                <thead><tr><th>Dátum</th><th>Čas</th><th>Miesto</th><th>Typ zmeny</th><th></th></tr></thead>
                 <tbody id='shiftRows'>{{initialRows}}</tbody>
               </table>
               <div id='modal_subscribe' style='display:none'>
@@ -454,7 +543,7 @@ public sealed class ShiftCheckerWorkflowTests : IDisposable
                 <option value='100'>100</option>
               </select>
               <table id='invitations_table'>
-                <thead><tr><th>User</th><th>Od</th></tr></thead>
+                <thead><tr><th>Dátum</th><th>Čas</th><th>Miesto</th><th>Typ zmeny</th><th></th></tr></thead>
                 <tbody id='shiftRows'></tbody>
               </table>
               <div id='invitations_table_paginate' class='dataTables_paginate paging_simple_numbers'>
@@ -548,7 +637,7 @@ public sealed class ShiftCheckerWorkflowTests : IDisposable
                 <option value='100'>100</option>
               </select>
               <table id='invitations_table'>
-                <thead><tr><th>User</th><th>Od</th></tr></thead>
+                <thead><tr><th>Dátum</th><th>Čas</th><th>Miesto</th><th>Typ zmeny</th><th></th></tr></thead>
                 <tbody id='shiftRows'>{{firstRow}}</tbody>
               </table>
               <div id='modal_subscribe' style='display:none'>
@@ -592,14 +681,16 @@ public sealed class ShiftCheckerWorkflowTests : IDisposable
         DateTime date,
         string timeFrom,
         string user,
-        string? shiftIdentifier = null)
+        string? shiftIdentifier = null,
+        string location = "Rastislavova",
+        string timeTo = "23:30")
     {
         string dateText = date.ToString("dd.MM.yyyy", CultureInfo.InvariantCulture);
         shiftIdentifier ??= $"shift-{date:yyyyMMdd}-{timeFrom.Replace(':', '-')}-{Uri.EscapeDataString(user)}";
         return $$"""
             <tr>
-              <td>{{dateText}}</td><td>{{timeFrom}}</td><td>23:30</td><td>{{user}}</td>
-              <td><button class='subscribe_shift' data-id='{{shiftIdentifier}}' onclick="subscribe('{{user}}')">Join</button></td>
+              <td>{{dateText}}</td><td>{{timeFrom}} - {{timeTo}}</td><td>{{location}}</td><td>{{user}}</td>
+              <td><button class='subscribe_shift' data-id='{{shiftIdentifier}}' onclick="sessionStorage.setItem('selectedShift','{{shiftIdentifier}}');subscribe('{{user}}')">Join</button></td>
             </tr>
             """;
     }

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Threading;
@@ -51,7 +51,7 @@ namespace GymBeamShiftsControllerX.Services
                     ExpectedConditions.ElementToBeClickable(By.CssSelector(AppConstants.SortHeaderSelector))
                 );
                 sortHeader.Click();
-                Logger.Log("Нажат заголовок 'Od' - первый клик");
+                Logger.Log("Нажат заголовок времени смены.");
 
                 wait.Until(webDriver =>
                 {
@@ -88,7 +88,7 @@ namespace GymBeamShiftsControllerX.Services
                 var startTimesToSkipOnWeekendsAndHolidays =
                     rules.StartTimesToSkipOnWeekendsAndHolidays ?? new List<string>();
                 var includedWeekdays = ParseWeekdaySet(rules.IncludedWeekdays);
-                var favoriteShiftUserPriorities = ParseFavoriteShiftUserPriorities(rules.FavoriteShiftUsers);
+                shiftList = shiftList.Where(shift => ShiftPreferences.IsAllowed(shift, rules)).ToList();
                 bool shiftRegistered = false;
 
                 NotifyAboutUnavailableTargetShifts(
@@ -96,7 +96,7 @@ namespace GymBeamShiftsControllerX.Services
                     rules.TargetShiftDateTimes,
                     notifiedUnavailableTargetStarts);
 
-                foreach (var shift in PrioritizeShiftsByFavoriteUsers(shiftList, favoriteShiftUserPriorities))
+                foreach (var shift in ShiftPreferences.Prioritize(shiftList, rules))
                 {
                     if (_skippedNewWorkerShiftIds.Contains(shift.ShiftIdentifier))
                     {
@@ -122,7 +122,7 @@ namespace GymBeamShiftsControllerX.Services
                         string message = BuildSuccessfulShiftMessage(shift);
                         Logger.Log(
                             $"Найдена релевантная смена: {shift.Date:dd.MM.yyyy} "
-                            + $"{shift.TimeFrom}-{shift.TimeTo}, User: {shift.UserId}");
+                            + $"{shift.TimeFrom}-{shift.TimeTo}, Місце: {shift.Location}, Тип: {shift.ShiftType}");
 
                         if (!NavigateToPage(driver, wait, shift.PageNumber))
                         {
@@ -148,9 +148,8 @@ namespace GymBeamShiftsControllerX.Services
                         bool subscriptionConfirmed = false;
                         try
                         {
-                            var subscribeModal = wait.Until(
-                                ExpectedConditions.ElementIsVisible(By.Id(AppConstants.SubscribeModalId))
-                            );
+                            var subscribeModal = WaitForPortalModal(driver, wait,
+                                AppConstants.SubscribeModalId, currentButton.GetAttribute("data-id"));
                             Logger.Log("Модальное окно открыто.");
 
                             if (subscribeModal.Text.Contains(
@@ -214,6 +213,20 @@ namespace GymBeamShiftsControllerX.Services
                     return;
                 }
             }
+        }
+
+        private static IWebElement WaitForPortalModal(
+            IWebDriver driver, WebDriverWait wait, string modalId, string? recordId)
+        {
+            var modal = wait.Until(ExpectedConditions.ElementIsVisible(By.Id(modalId)));
+
+            var record = modal.FindElements(By.CssSelector("input[name='record_id']")).FirstOrDefault();
+            if (record != null && !string.IsNullOrWhiteSpace(recordId)
+                && record.GetAttribute("value") != recordId)
+            {
+                throw new InvalidOperationException("Portal modal contains a different shift record.");
+            }
+            return modal;
         }
 
         private static void SelectAllShiftsPerPage(WebDriverWait wait)
@@ -313,9 +326,14 @@ namespace GymBeamShiftsControllerX.Services
                     continue;
                 }
 
-                string timeFrom = cells[1].Text.Trim();
-                string timeTo = cells[2].Text.Trim();
-                string userId = cells[3].Text.Trim();
+                if (!ShiftTimeParser.TryParseRange(cells[1].Text, out string timeFrom, out string timeTo))
+                {
+                    Logger.Log($"Пропущено рядок за {dateStr}: некоректний діапазон часу.");
+                    continue;
+                }
+
+                string location = ShiftPreferences.Normalize(cells[2].Text);
+                string shiftType = ShiftPreferences.Normalize(cells[3].Text);
 
                 IWebElement? buttonElement = null;
                 try
@@ -332,13 +350,15 @@ namespace GymBeamShiftsControllerX.Services
                     Date = parsedDate,
                     TimeFrom = timeFrom,
                     TimeTo = timeTo,
-                    UserId = userId,
+                    Location = location,
+                    ShiftType = shiftType,
                     ShiftIdentifier = GetShiftIdentifier(
                         buttonElement,
                         parsedDate,
                         timeFrom,
                         timeTo,
-                        userId),
+                        location,
+                        shiftType),
                     PageNumber = pageNumber,
                     ButtonElement = buttonElement
                 });
@@ -418,13 +438,15 @@ namespace GymBeamShiftsControllerX.Services
             int? previousPageNumber = GetActivePageNumber(driver);
             links[0].Click();
 
-            wait.Until(webDriver =>
+            bool PageChanged(IWebDriver webDriver)
             {
                 int? currentPageNumber = GetActivePageNumber(webDriver);
                 return previousPageNumber.HasValue
                     ? currentPageNumber.HasValue && currentPageNumber != previousPageNumber
                     : IsTableProcessingComplete(webDriver);
-            });
+            }
+
+            wait.Until(PageChanged);
             wait.Until(IsTableProcessingComplete);
             return true;
         }
@@ -462,12 +484,13 @@ namespace GymBeamShiftsControllerX.Services
             DateTime date,
             string timeFrom,
             string timeTo,
-            string userId)
+            string location,
+            string shiftType)
         {
             string? dataId = buttonElement?.GetAttribute("data-id")?.Trim();
             return !string.IsNullOrWhiteSpace(dataId)
                 ? dataId
-                : $"{date:yyyy-MM-dd}|{timeFrom}|{timeTo}|{userId}";
+                : $"{date:yyyy-MM-dd}|{timeFrom}|{timeTo}|{location}|{shiftType}";
         }
 
         private static void ScrollIntoViewAndClick(
@@ -543,23 +566,13 @@ namespace GymBeamShiftsControllerX.Services
         private static bool TryParseShiftStart(ShiftEntry shift, out DateTime shiftStart)
         {
             shiftStart = default;
-            var timeParts = shift.TimeFrom.Split(':');
-            if (timeParts.Length != 2)
+            if (!TimeOnly.TryParseExact(shift.TimeFrom, "HH:mm", CultureInfo.InvariantCulture,
+                    DateTimeStyles.None, out var start))
             {
                 return false;
             }
 
-            if (!int.TryParse(timeParts[0], out int shiftHour))
-            {
-                return false;
-            }
-
-            if (!int.TryParse(timeParts[1], out int shiftMinute))
-            {
-                return false;
-            }
-
-            shiftStart = shift.Date.AddHours(shiftHour).AddMinutes(shiftMinute);
+            shiftStart = shift.Date.Date.Add(start.ToTimeSpan());
             return true;
         }
 
@@ -584,10 +597,10 @@ namespace GymBeamShiftsControllerX.Services
             bool isIncludedWeekday = includedWeekdays.Contains(dow);
             bool isHoliday = holidays.Contains(shift.Date.Date);
 
-            bool skipTimeApplies = (!isWeekend
-                && !isHoliday)
-                || startTimesToSkipOnWeekendsAndHolidays.Contains(shift.TimeFrom);
-            if (skipTimeApplies && startTimesToSkip.Contains(shift.TimeFrom))
+            var applicableSkipTimes = isWeekend || isHoliday
+                ? startTimesToSkip.Where(time => startTimesToSkipOnWeekendsAndHolidays.Contains(time))
+                : startTimesToSkip;
+            if (ShiftTimeParser.IsBlockedStart(shift.TimeFrom, applicableSkipTimes))
             {
                 return false;
             }
@@ -664,7 +677,8 @@ namespace GymBeamShiftsControllerX.Services
                 "Зміна, яку ви шукаєте, з’явилася:\n" +
                 $"Дата: {shift.Date:dd.MM.yyyy}\n" +
                 $"Час: {shift.TimeFrom}-{shift.TimeTo}\n" +
-                $"Працівник: {shift.UserId}\n\n" +
+                $"Місце: {shift.Location}\n" +
+                $"Тип зміни: {shift.ShiftType}\n\n" +
                 "Бот не може самостійно обрати цю зміну, оскільки для неї немає кнопки «Prihlásiť». " +
                 "Перевірте зміну та спробуйте записатися вручну.";
         }
@@ -675,7 +689,8 @@ namespace GymBeamShiftsControllerX.Services
                 "✅ Зміну знайдено та успішно обрано\n\n" +
                 $"Дата: {shift.Date:dd.MM.yyyy}\n" +
                 $"Час: {shift.TimeFrom}-{shift.TimeTo}\n" +
-                $"Працівник: {shift.UserId}";
+                $"Місце: {shift.Location}\n" +
+                $"Тип зміни: {shift.ShiftType}";
         }
 
         private void SendShiftNotifications(string message, bool isWeekendOrHoliday)
@@ -745,123 +760,5 @@ namespace GymBeamShiftsControllerX.Services
             return result;
         }
 
-        private static Dictionary<string, int> ParseFavoriteShiftUserPriorities(List<string> users)
-        {
-            var result = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
-            if (users == null)
-            {
-                return result;
-            }
-
-            foreach (var user in users)
-            {
-                if (string.IsNullOrWhiteSpace(user))
-                {
-                    continue;
-                }
-
-                var trimmed = user.Trim();
-                if (!result.ContainsKey(trimmed))
-                {
-                    result.Add(trimmed, result.Count);
-                }
-            }
-
-            return result;
-        }
-
-        private static List<ShiftEntry> PrioritizeShiftsByFavoriteUsers(
-            List<ShiftEntry> shifts,
-            Dictionary<string, int> favoriteShiftUserPriorities)
-        {
-            if (shifts == null || shifts.Count == 0 || favoriteShiftUserPriorities == null || favoriteShiftUserPriorities.Count == 0)
-            {
-                return shifts ?? new List<ShiftEntry>();
-            }
-
-            var result = new List<ShiftEntry>(shifts.Count);
-            var processedDates = new HashSet<DateTime>();
-
-            foreach (var currentShift in shifts)
-            {
-                var currentDate = currentShift.Date.Date;
-                if (!processedDates.Add(currentDate))
-                {
-                    continue;
-                }
-
-                var sameDateShifts = new List<ShiftEntry>();
-                foreach (var shift in shifts)
-                {
-                    if (shift.Date.Date == currentDate)
-                    {
-                        sameDateShifts.Add(shift);
-                    }
-                }
-
-                result.AddRange(HasMultipleDifferentUsers(sameDateShifts)
-                    ? PrioritizeSameDateShifts(sameDateShifts, favoriteShiftUserPriorities)
-                    : sameDateShifts);
-            }
-
-            return result;
-        }
-
-        private static bool HasMultipleDifferentUsers(List<ShiftEntry> shifts)
-        {
-            var users = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            foreach (var shift in shifts)
-            {
-                users.Add((shift.UserId ?? string.Empty).Trim());
-                if (users.Count >= 2)
-                {
-                    return true;
-                }
-            }
-
-            return false;
-        }
-
-        private static List<ShiftEntry> PrioritizeSameDateShifts(
-            List<ShiftEntry> shifts,
-            Dictionary<string, int> favoriteShiftUserPriorities)
-        {
-            var indexedShifts = new List<(ShiftEntry Shift, int Index)>();
-            for (int i = 0; i < shifts.Count; i++)
-            {
-                indexedShifts.Add((shifts[i], i));
-            }
-
-            indexedShifts.Sort((left, right) =>
-            {
-                int priorityComparison = GetFavoriteShiftUserPriority(left.Shift, favoriteShiftUserPriorities)
-                    .CompareTo(GetFavoriteShiftUserPriority(right.Shift, favoriteShiftUserPriorities));
-                return priorityComparison != 0
-                    ? priorityComparison
-                    : left.Index.CompareTo(right.Index);
-            });
-
-            var result = new List<ShiftEntry>(indexedShifts.Count);
-            foreach (var indexedShift in indexedShifts)
-            {
-                result.Add(indexedShift.Shift);
-            }
-
-            return result;
-        }
-
-        private static int GetFavoriteShiftUserPriority(
-            ShiftEntry shift,
-            Dictionary<string, int> favoriteShiftUserPriorities)
-        {
-            if (string.IsNullOrWhiteSpace(shift.UserId))
-            {
-                return int.MaxValue;
-            }
-
-            return favoriteShiftUserPriorities.TryGetValue(shift.UserId.Trim(), out int priority)
-                ? priority
-                : int.MaxValue;
-        }
     }
 }
