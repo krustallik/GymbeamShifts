@@ -10,6 +10,29 @@ namespace GymBeamShiftsControllerX.Tests;
 [Collection("MutableEnvironment")]
 public class ConfigurationLoaderTests
 {
+    [Theory]
+    [InlineData("https://part-time.gymbeam.com/web/login", "https://part-time.gymbeam.com/sk/web/login")]
+    [InlineData("https://part-time.gymbeam.com/sk/web/login", "https://part-time.gymbeam.com/sk/web/login")]
+    [InlineData("https://example.com/login", "https://example.com/login")]
+    public void Load_LocalizesLegacyPortalUrlWithoutRewritingServerConfig(string original, string expected)
+    {
+        string path = Path.Combine(TestPathHelper.GetWorkspaceRoot(), $"appconfig.loader.{Guid.NewGuid():N}.json");
+        string json = System.Text.Json.JsonSerializer.Serialize(new AppConfig
+        {
+            Auth = new AuthSettings { LoginUrl = original }
+        });
+        try
+        {
+            File.WriteAllText(path, json);
+            Assert.Equal(expected, ConfigurationLoader.Load(path, validateRequiredSecrets: false).Auth.LoginUrl);
+            Assert.Equal(json, File.ReadAllText(path));
+        }
+        finally
+        {
+            if (File.Exists(path)) File.Delete(path);
+        }
+    }
+
     [Fact]
     public void Load_UsesEnvironmentOverrides_ForSecrets()
     {

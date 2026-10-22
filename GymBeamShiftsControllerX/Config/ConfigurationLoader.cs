@@ -29,6 +29,12 @@ namespace GymBeamShiftsControllerX.Config
 
             ResolveSecretPlaceholders(config);
             ApplyEnvironmentOverrides(config);
+            // Existing server-local configs retain the former unlocalized portal URL.
+            if (string.Equals(config.Auth.LoginUrl, "https://part-time.gymbeam.com/web/login",
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                config.Auth.LoginUrl = "https://part-time.gymbeam.com/sk/web/login";
+            }
             if (validateRequiredSecrets)
             {
                 ValidateRequiredSecrets(config);
