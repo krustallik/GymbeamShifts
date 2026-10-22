@@ -95,6 +95,52 @@ public class AdminWebServerIntegrationTests : IDisposable
     }
 
     [Fact]
+    public async Task WeekdayTimes_PersistIndependentListsEmptyOverridesAndLegacyOmission()
+    {
+        await LoginAsync("testadmin", "testpass");
+        async Task Put(object payload)
+        {
+            var response = await _client.PutAsync("/api/shift-rules", new StringContent(
+                JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json"));
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        }
+        await Put(new
+        {
+            includedWeekdays = new[] { "Thursday", "Friday" },
+            startTimesToSkip = new[] { "22:00" },
+            weekdayStartTimesToSkip = new Dictionary<string, string[]> { ["thursday"] = new[] { "14:00" }, ["Friday"] = Array.Empty<string>() }
+        });
+        await Put(new { includedWeekdays = new[] { "Friday" }, startTimesToSkip = new[] { "08:00" } });
+        using var json = JsonDocument.Parse(await _client.GetStringAsync("/api/shift-rules"));
+        var days = json.RootElement.GetProperty("weekdayStartTimesToSkip");
+        Assert.Equal("14:00", days.GetProperty("Thursday")[0].GetString());
+        Assert.Empty(days.GetProperty("Friday").EnumerateArray());
+        var saved = JsonSerializer.Deserialize<AppConfig>(File.ReadAllText(_configPath))!;
+        Assert.Equal(new[] { "08:00" }, saved.ShiftRules.StartTimesToSkip);
+        Assert.Equal(new[] { "14:00" }, saved.ShiftRules.WeekdayStartTimesToSkip["Thursday"]);
+        Assert.Empty(saved.ShiftRules.WeekdayStartTimesToSkip["Friday"]);
+        await Put(new { weekdayStartTimesToSkip = new Dictionary<string, string[]>() });
+        using var reset = JsonDocument.Parse(await _client.GetStringAsync("/api/shift-rules"));
+        Assert.Empty(reset.RootElement.GetProperty("weekdayStartTimesToSkip").EnumerateObject());
+    }
+
+    [Theory]
+    [InlineData("{\"Saturday\":[\"14:00\"]}")]
+    [InlineData("{\"Monday\":[\"24:00\"]}")]
+    [InlineData("{\"Monday\":null}")]
+    [InlineData("{\"Monday\":[null]}")]
+    [InlineData("{\"Monday\":[],\"monday\":[]}")]
+    public async Task WeekdayTimes_InvalidPayloadDoesNotChangeConfig(string overrides)
+    {
+        await LoginAsync("testadmin", "testpass");
+        string original = File.ReadAllText(_configPath);
+        string body = "{\"weekdayStartTimesToSkip\":" + overrides + "}";
+        var response = await _client.PutAsync("/api/shift-rules", new StringContent(body, Encoding.UTF8, "application/json"));
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal(original, File.ReadAllText(_configPath));
+    }
+
+    [Fact]
     public async Task PreferenceLists_RoundTripNormalizeAndPersistAllFourFields()
     {
         await LoginAsync("testadmin", "testpass");

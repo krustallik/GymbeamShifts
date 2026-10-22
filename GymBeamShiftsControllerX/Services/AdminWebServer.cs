@@ -28,6 +28,7 @@ namespace GymBeamShiftsControllerX.Services
         public bool TakeLunch { get; set; } = false;
         public List<string> IncludedWeekdays { get; set; } = new List<string>();
         public List<string> StartTimesToSkip { get; set; } = new List<string>();
+        public Dictionary<string, List<string>>? WeekdayStartTimesToSkip { get; set; }
         public List<string> StartTimesToSkipOnWeekendsAndHolidays { get; set; } = new List<string>();
         public List<string> Holidays { get; set; } = new List<string>();
         public List<string> ExcludedDates { get; set; } = new List<string>();
@@ -47,6 +48,7 @@ namespace GymBeamShiftsControllerX.Services
         public bool TakeLunch { get; set; }
         public List<string> IncludedWeekdays { get; set; } = new List<string>();
         public List<string> StartTimesToSkip { get; set; } = new List<string>();
+        public Dictionary<string, List<string>> WeekdayStartTimesToSkip { get; set; } = new();
         public List<string> StartTimesToSkipOnWeekendsAndHolidays { get; set; } = new List<string>();
         public List<string> Holidays { get; set; } = new List<string>();
         public List<string> ExcludedDates { get; set; } = new List<string>();
@@ -378,6 +380,12 @@ namespace GymBeamShiftsControllerX.Services
                     return;
                 }
 
+                if (!WeekdayTimeRules.IsValid(update.WeekdayStartTimesToSkip))
+                {
+                    WriteJson(context.Response, 400, new { error = "Налаштування за днями: лише Monday–Friday, до 100 значень HH:mm на день; порожній список дозволений." });
+                    return;
+                }
+
                 if (!AreValidTargetShiftDateTimes(update.TargetShiftDateTimes))
                 {
                     WriteJson(context.Response, 400, new
@@ -576,6 +584,7 @@ namespace GymBeamShiftsControllerX.Services
                 TakeLunch = rules.TakeLunch,
                 IncludedWeekdays = rules.IncludedWeekdays,
                 StartTimesToSkip = rules.StartTimesToSkip,
+                WeekdayStartTimesToSkip = rules.WeekdayStartTimesToSkip,
                 StartTimesToSkipOnWeekendsAndHolidays = rules.StartTimesToSkipOnWeekendsAndHolidays,
                 Holidays = rules.Holidays,
                 ExcludedDates = rules.ExcludedDates,
@@ -831,6 +840,13 @@ namespace GymBeamShiftsControllerX.Services
     .card { border:1px solid #344454; padding:24px; }
     .timing-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:20px; align-items:end; }
     .grid { grid-template-columns:repeat(2,minmax(0,1fr)); gap:28px; }
+    .weekday-settings { margin-top:28px; padding:20px; border:1px solid #374151; border-radius:8px; }
+    .weekday-tabs { display:flex; flex-wrap:wrap; gap:8px; margin:16px 0; }
+    .weekday-tabs button { width:auto; min-width:104px; margin:0; background:#263746; color:#dce5ee; border:1px solid #526272; }
+    .weekday-tabs button[aria-selected=true] { background:#df6516; color:white; border-color:#df6516; }
+    .weekday-mode { display:flex; gap:10px; align-items:center; margin:12px 0; }
+    .weekday-mode input { width:auto; margin:0; }
+    #weekdayPanel textarea { max-width:640px; display:block; }
     .preferences-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:24px; margin:28px 0; }
     .preference-panel { border-top:3px solid #df641e; padding:20px; background:#14202b; border-radius:4px; }
     .field-note,.rule-note { color:#acbdcb; font-size:14px; max-width:78ch; }
@@ -896,7 +912,7 @@ namespace GymBeamShiftsControllerX.Services
         <div class='grid'>
           <div>
             <div class='label-row'><label for='includedWeekdays'>Дозволені дні тижня, по одному в рядку</label><span class='help' tabindex='0' data-tip='Дні тижня, у які бот може брати зміни. Вводьте англійські назви Monday–Sunday, оскільки їх очікує система GymBeam.'>?</span></div>
-            <textarea id='includedWeekdays' rows='6'></textarea>
+            <textarea id='includedWeekdays' rows='6' oninput='renderWeekdaySettings()'></textarea>
             <div class='label-row'><label for='startTimesToSkip'>Час початку, який треба пропускати (±30 хв)</label><span class='help' tabindex='0' data-tip='Кожне значення вводьте з нового рядка у форматі HH:mm. Бот пропускає початок у межах ±30 хвилин включно: 14:00 блокує 13:30–14:30. Правило працює і через північ. Для кожного часу праворуч з’явиться чекбокс. Якщо його позначити, цей час блокуватиме зміни також у суботу, неділю та святкові дати. Без позначки фільтр діє лише у звичайні будні.'>?</span></div>
             <div class='time-rule-editor'>
               <textarea id='startTimesToSkip' rows='7' oninput='renderStartTimeScopeOptions()'></textarea>
@@ -913,6 +929,12 @@ namespace GymBeamShiftsControllerX.Services
             <textarea id='excludedDates' rows='6'></textarea>
           </div>
         </div>
+        <section class='weekday-settings' aria-labelledby='weekdaySettingsTitle'>
+          <h3 id='weekdaySettingsTitle'>Налаштування за днями</h3>
+          <p class='field-note'>Тут можна змінити лише часові виключення дозволених будніх днів. Решта правил спільні. У свята й вихідні діють базові часові правила та їхні прапорці.</p>
+          <div id='weekdayTabs' class='weekday-tabs' role='tablist' aria-label='Дозволені будні'></div>
+          <div id='weekdayPanel'></div>
+        </section>
         <div class='preferences-grid'><section class='preference-panel'><h3>Типи змін</h3><p class='field-note'>Колонка Typ zmeny. Одна повна назва на рядок.</p><div class='label-row'><label for='preferredShiftTypes'>Пріоритетні типи змін</label><span class='help' tabindex='0' data-tip='Перший рядок має найвищий пріоритет. Інші дозволені зміни також можна брати. Пріоритет типу важливіший за місце; порядок застосовується в межах однієї дати.'>?</span></div><textarea id='preferredShiftTypes' rows='4' placeholder='B2B - CTP2'></textarea><div class='label-row'><label for='excludedShiftTypes'>Типи змін, які не брати</label><span class='help' tabindex='0' data-tip='Бот пропускає зміни з цими значеннями. Заборона важливіша за будь-який пріоритет. Порожній список нічого не забороняє.'>?</span></div><textarea id='excludedShiftTypes' rows='4'></textarea><details class='known-values'><summary>Приклади назв із сайту</summary><ul><li>B2B - CTP2</li><li>CTP2 Export</li><li>IMPORT Letisko WHS, Bahýľová1704</li><li>Medzizmena EXPORT</li><li>Olepovanie B2B</li><li>RAS príjem tovaru</li><li>RAS Výroba</li><li>Vrátené/výmenné balíky</li></ul></details></section><section class='preference-panel'><h3>Місця роботи</h3><p class='field-note'>Колонка Miesto. Одна повна назва на рядок.</p><div class='label-row'><label for='preferredLocations'>Пріоритетні місця</label><span class='help' tabindex='0' data-tip='Перший рядок має найвищий пріоритет. Інші дозволені зміни також можна брати. Пріоритет типу важливіший за місце; порядок застосовується в межах однієї дати.'>?</span></div><textarea id='preferredLocations' rows='4' placeholder='CTP2 - whs - letisko'></textarea><div class='label-row'><label for='excludedLocations'>Місця, які не брати</label><span class='help' tabindex='0' data-tip='Бот пропускає зміни з цими значеннями. Заборона важливіша за будь-який пріоритет. Порожній список нічого не забороняє.'>?</span></div><textarea id='excludedLocations' rows='4'></textarea><details class='known-values'><summary>Приклади назв із сайту</summary><ul><li>CTP2 - whs - letisko</li><li>Rastislavova</li></ul></details></section></div>
         <p class='field-note'>Порожні пріоритети зберігають черговість сайту. Назви порівнюються без урахування регістру й зайвих пробілів.</p>
         <div class='save-bar'><button id='rulesSaveButton' onclick='saveRules()'>Зберегти правила</button><div id='rulesError' class='validation-error' role='status' aria-live='polite'></div></div>
@@ -1014,9 +1036,66 @@ namespace GymBeamShiftsControllerX.Services
         : null;
     }
 
+    let weekdayStartTimesToSkip = {};
+    let activeWeekday = null;
+    const weekdayLabels = {Monday:'Понеділок', Tuesday:'Вівторок', Wednesday:'Середа', Thursday:'Четвер', Friday:'П’ятниця'};
+
+    function renderWeekdaySettings(focusTab = false) {
+      const included = new Set(linesToArray(document.getElementById('includedWeekdays').value).map(day => day.toLowerCase()));
+      const days = Object.keys(weekdayLabels).filter(day => included.has(day.toLowerCase()));
+      if (!days.includes(activeWeekday)) activeWeekday = days[0] ?? null;
+      const tabs = document.getElementById('weekdayTabs'); tabs.replaceChildren();
+      const panel = document.getElementById('weekdayPanel'); panel.replaceChildren();
+      if (!activeWeekday) {
+        panel.removeAttribute('role'); panel.removeAttribute('aria-labelledby');
+        const note = document.createElement('p'); note.className = 'field-note';
+        note.textContent = 'Додайте дозволені будні вище, щоб налаштувати їх окремо.';
+        panel.append(note); return;
+      }
+      for (const day of days) {
+        const tab = document.createElement('button'); tab.type = 'button'; tab.role = 'tab';
+        tab.id = 'weekdayTab-' + day; tab.dataset.weekday = day;
+        tab.textContent = weekdayLabels[day]; tab.setAttribute('aria-controls', 'weekdayPanel');
+        tab.setAttribute('aria-selected', String(day === activeWeekday)); tab.tabIndex = day === activeWeekday ? 0 : -1;
+        tab.onclick = () => { activeWeekday = day; renderWeekdaySettings(true); };
+        tab.onkeydown = event => {
+          if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+          event.preventDefault();
+          const index = days.indexOf(day);
+          activeWeekday = event.key === 'Home' ? days[0] : event.key === 'End' ? days[days.length - 1]
+            : days[(index + (event.key === 'ArrowRight' ? 1 : -1) + days.length) % days.length];
+          renderWeekdaySettings(true);
+        };
+        tabs.append(tab);
+      }
+      panel.role = 'tabpanel'; panel.setAttribute('aria-labelledby', 'weekdayTab-' + activeWeekday);
+      const day = activeWeekday;
+      const inherit = !Object.prototype.hasOwnProperty.call(weekdayStartTimesToSkip, day);
+      const modeLabel = document.createElement('label'); modeLabel.className = 'weekday-mode';
+      const mode = document.createElement('input'); mode.type = 'checkbox'; mode.id = 'weekdayUseBase'; mode.checked = inherit;
+      mode.onchange = () => {
+        if (mode.checked) delete weekdayStartTimesToSkip[day];
+        else weekdayStartTimesToSkip[day] = [...linesToArray(document.getElementById('startTimesToSkip').value)];
+        renderWeekdaySettings(); document.getElementById('weekdayUseBase').focus();
+      };
+      modeLabel.append(mode, document.createTextNode('Використовувати базові часові виключення'));
+      const label = document.createElement('label'); label.htmlFor = 'weekdayTimes';
+      label.textContent = weekdayLabels[day] + ': час початку, який треба пропускати (±30 хв)';
+      const input = document.createElement('textarea'); input.id = 'weekdayTimes'; input.rows = 5; input.disabled = inherit;
+      input.value = inherit ? document.getElementById('startTimesToSkip').value : arrayToLines(weekdayStartTimesToSkip[day]);
+      input.oninput = input.onchange = () => { weekdayStartTimesToSkip[day] = linesToArray(input.value); };
+      const note = document.createElement('p'); note.className = 'field-note'; note.id = 'weekdayInheritanceNote';
+      note.textContent = inherit ? 'Цей день підхоплює зміни базового списку. Вимкніть перемикач для власного списку.'
+        : 'Власний список незалежний від базового. Порожній список не блокує жоден час. Усі інші налаштування залишаються спільними.';
+      input.setAttribute('aria-describedby', note.id);
+      panel.append(modeLabel, label, input, note);
+      if (focusTab) document.getElementById('weekdayTab-' + activeWeekday).focus();
+    }
+
     let startTimesToSkipOnWeekendsAndHolidays = new Set();
 
     function renderStartTimeScopeOptions() {
+      renderWeekdaySettings();
       const times = [...new Set(linesToArray(document.getElementById('startTimesToSkip').value))];
       const availableTimes = new Set(times);
       startTimesToSkipOnWeekendsAndHolidays = new Set(
@@ -1072,6 +1151,12 @@ namespace GymBeamShiftsControllerX.Services
         'Час початку, який треба пропускати',
         isValidTime,
         'час у форматі HH:mm (00:00–23:59)');
+      const weekdayOverrides = {};
+      for (const [day, values] of Object.entries(weekdayStartTimesToSkip)) {
+        if (!Object.prototype.hasOwnProperty.call(weekdayLabels, day) || !Array.isArray(values) || values.length > 100)
+          throw new Error('Некоректні налаштування за днями. Максимум 100 значень на день.');
+        weekdayOverrides[day] = validateList(values, weekdayLabels[day], isValidTime, 'час у форматі HH:mm (00:00–23:59)');
+      }
       const preferenceLists = {};
       const preferenceLabels = {
         preferredShiftTypes: 'Пріоритетні типи змін', excludedShiftTypes: 'Типи змін, які не брати',
@@ -1107,6 +1192,7 @@ namespace GymBeamShiftsControllerX.Services
         importantShiftNotificationDelayMilliseconds: readInteger('importantShiftNotificationDelayMilliseconds', 'Затримка між важливими сповіщеннями', 0, 600000),
         targetShiftDateTimes,
         includedWeekdays,
+        weekdayStartTimesToSkip: weekdayOverrides,
         startTimesToSkip,
         startTimesToSkipOnWeekendsAndHolidays: startTimesToSkip.filter(
           value => startTimesToSkipOnWeekendsAndHolidays.has(value)),
@@ -1173,6 +1259,9 @@ namespace GymBeamShiftsControllerX.Services
       document.getElementById('startTimesToSkip').value = arrayToLines(rules.startTimesToSkip);
       startTimesToSkipOnWeekendsAndHolidays = new Set(
         rules.startTimesToSkipOnWeekendsAndHolidays ?? []);
+      weekdayStartTimesToSkip = Object.fromEntries(Object.entries(rules.weekdayStartTimesToSkip ?? {})
+        .filter(([day, times]) => Object.prototype.hasOwnProperty.call(weekdayLabels, day) && Array.isArray(times))
+        .map(([day, times]) => [day, [...times]]));
       renderStartTimeScopeOptions();
       for (const id of ['preferredShiftTypes', 'excludedShiftTypes', 'preferredLocations', 'excludedLocations']) {
         document.getElementById(id).value = arrayToLines(rules[id]);

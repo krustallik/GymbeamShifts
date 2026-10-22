@@ -28,6 +28,7 @@
       "22:00",
       "21:45"
     ],
+    "WeekdayStartTimesToSkip": {},
     "StartTimesToSkipOnWeekendsAndHolidays": [],
     "Holidays": [
       "2026-01-01",

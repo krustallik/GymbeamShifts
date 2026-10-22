@@ -84,7 +84,6 @@ namespace GymBeamShiftsControllerX.Services
                 var rules = _shiftRulesStore.GetSnapshot();
                 var holidays = ParseDateSet(rules.Holidays);
                 var excludedDates = ParseDateSet(rules.ExcludedDates);
-                var startTimesToSkip = rules.StartTimesToSkip ?? new List<string>();
                 var startTimesToSkipOnWeekendsAndHolidays =
                     rules.StartTimesToSkipOnWeekendsAndHolidays ?? new List<string>();
                 var includedWeekdays = ParseWeekdaySet(rules.IncludedWeekdays);
@@ -107,7 +106,7 @@ namespace GymBeamShiftsControllerX.Services
                             shift,
                             holidays,
                             excludedDates,
-                            startTimesToSkip,
+                            WeekdayTimeRules.Resolve(rules, shift.Date, holidays.Contains(shift.Date.Date)),
                             startTimesToSkipOnWeekendsAndHolidays,
                             includedWeekdays,
                             _config.Timing.ShiftMinHoursAhead,

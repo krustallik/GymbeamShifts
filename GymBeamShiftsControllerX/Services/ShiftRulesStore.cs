@@ -33,6 +33,7 @@ namespace GymBeamShiftsControllerX.Services
                     TakeLunch = update.TakeLunch,
                     IncludedWeekdays = CleanList(update.IncludedWeekdays),
                     StartTimesToSkip = startTimesToSkip,
+                    WeekdayStartTimesToSkip = WeekdayTimeRules.Copy(update.WeekdayStartTimesToSkip ?? _current.WeekdayStartTimesToSkip),
                     StartTimesToSkipOnWeekendsAndHolidays = CleanSubset(
                         update.StartTimesToSkipOnWeekendsAndHolidays,
                         startTimesToSkip),
@@ -66,6 +67,7 @@ namespace GymBeamShiftsControllerX.Services
             return new ShiftRulesSettings
             {
                 TakeLunch = source.TakeLunch,
+                WeekdayStartTimesToSkip = WeekdayTimeRules.Copy(source.WeekdayStartTimesToSkip),
                 IncludedWeekdays = new List<string>(source.IncludedWeekdays ?? new List<string>()),
                 StartTimesToSkip = new List<string>(source.StartTimesToSkip ?? new List<string>()),
                 StartTimesToSkipOnWeekendsAndHolidays = new List<string>(

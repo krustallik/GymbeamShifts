@@ -421,8 +421,42 @@ public sealed class ShiftCheckerWorkflowTests : IDisposable
         Assert.IsType<InvalidOperationException>(error.InnerException);
     }
 
+    [Theory]
+    [InlineData(false, false, "allowed-next")]
+    [InlineData(true, false, "custom-blocked")]
+    [InlineData(false, true, "custom-blocked")]
+    public void CheckForShifts_UsesOwnWeekdayTimesExceptOnHoliday(bool emptyOverride, bool holiday, string expected)
+    {
+        DateTime date = GetFutureSaturday().AddDays(2);
+        string rows = CreateShiftRow(date, "14:01", "CTP2 Export", "custom-blocked")
+            + CreateShiftRow(date, "22:00", "CTP2 Export", "base-blocked")
+            + CreateShiftRow(date, "08:00", "CTP2 Export", "allowed-next");
+        NavigateToScenario(CreateScenarioHtml(rows));
+        CreateChecker(false, weekdayTimes: new() { ["Monday"] = emptyOverride ? new() : new() { "14:00", "22:00" } },
+            startTimesToSkip: new() { "14:00", "22:00" },
+            weekendStartTimes: new() { "22:00" }, includedWeekdays: new() { "Monday" },
+            holidays: holiday ? new() { date.ToString("yyyy-MM-dd") } : null,
+            sendTelegramMessage: _ => { }).CheckForShifts();
+        Assert.Equal(expected, _driver.ExecuteScript("return sessionStorage.getItem('selectedShift')"));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void CheckForShifts_CustomEmptyTimesCannotBypassSharedDateOrAllowedWeekdays(bool excludeDate)
+    {
+        DateTime date = GetFutureSaturday().AddDays(2);
+        NavigateToScenario(CreateScenarioHtml(CreateShiftRow(date, "14:00", "CTP2 Export", "must-skip")));
+        CreateChecker(false, weekdayTimes: new() { ["Monday"] = new() },
+            includedWeekdays: excludeDate ? new() { "Monday" } : new() { "Friday" },
+            excludedDates: excludeDate ? new() { date.ToString("yyyy-MM-dd") } : null,
+            sendTelegramMessage: _ => throw new InvalidOperationException("Must not register")).CheckForShifts();
+        Assert.Null(_driver.ExecuteScript("return sessionStorage.getItem('selectedShift')"));
+    }
+
     private ShiftChecker CreateChecker(
         bool takeLunch,
+        Dictionary<string, List<string>>? weekdayTimes = null,
         List<string>? preferredTypes = null,
         List<string>? preferredLocations = null,
         List<string>? excludedTypes = null,
@@ -450,6 +484,7 @@ public sealed class ShiftCheckerWorkflowTests : IDisposable
             ShiftRules = new ShiftRulesSettings
             {
                 TakeLunch = takeLunch,
+                WeekdayStartTimesToSkip = weekdayTimes ?? new(),
                 PreferredShiftTypes = preferredTypes ?? new List<string>(),
                 PreferredLocations = preferredLocations ?? new List<string>(),
                 ExcludedShiftTypes = excludedTypes ?? new List<string>(),

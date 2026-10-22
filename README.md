@@ -123,6 +123,7 @@ flowchart TB
 - Detection and persistent skipping of shifts reserved for new workers.
 - Parsing of combined shift-time ranges, including overnight shifts.
 - Start-time exclusions cover an inclusive ±30-minute window, including across midnight, with separate weekend and holiday scope.
+- Allowed weekdays can override only their start-time exclusion list. Missing overrides inherit the current base list; custom lists remain independent when the base changes, and explicit empty lists block no times. Holidays and weekends keep the base rules. Disabled weekday settings are retained for re-enabling.
 - Configurable lunch selection and repeated important-shift notifications.
 - Recovery from stale DOM elements, disconnected WebDriver sessions, and failed
   login attempts with diagnostic HTML and screenshots.

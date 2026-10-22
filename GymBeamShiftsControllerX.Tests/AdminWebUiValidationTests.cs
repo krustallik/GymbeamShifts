@@ -196,6 +196,71 @@ public sealed class AdminWebUiValidationTests
         }
     }
 
+    [Fact]
+    public void WeekdaySettingsUi_OnlyEnabledDaysInheritUntilCustomizedAndKeepIndependentEmptyLists()
+    {
+        string directory = Path.Combine(Path.GetTempPath(), $"gymbeam-weekdays-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(directory);
+        var options = new ChromeOptions(); options.AddArgument("--headless=new"); options.AddArgument("--no-sandbox");
+        using var driver = new ChromeDriver(options);
+        try
+        {
+            string html = (string)ReflectionTestHelper.GetStaticMethod(typeof(AdminWebServer), "BuildAdminHtml").Invoke(null, null)!;
+            string path = Path.Combine(directory, "admin.html"); File.WriteAllText(path, html);
+            driver.Navigate().GoToUrl(new Uri(path).AbsoluteUri);
+            driver.ExecuteScript("""
+                document.getElementById('app').classList.remove('hidden');
+                document.getElementById('loginCard').classList.add('hidden');
+                document.getElementById('includedWeekdays').value = 'Thursday\nFriday';
+                document.getElementById('startTimesToSkip').value = '14:00\n22:00';
+                renderWeekdaySettings();
+                """);
+            Assert.Equal(2, driver.FindElements(By.CssSelector("#weekdayTabs button")).Count);
+            Assert.True(driver.FindElement(By.Id("weekdayTimes")).GetAttribute("disabled") != null);
+            Assert.Contains("22:00", driver.FindElement(By.Id("weekdayTimes")).GetAttribute("value"));
+            driver.ExecuteScript("document.getElementById('startTimesToSkip').value='08:00';renderStartTimeScopeOptions();");
+            Assert.Equal("08:00", driver.FindElement(By.Id("weekdayTimes")).GetAttribute("value"));
+            driver.FindElement(By.Id("weekdayUseBase")).Click();
+            Assert.Equal("08:00", driver.FindElement(By.Id("weekdayTimes")).GetAttribute("value"));
+            var own = driver.FindElement(By.Id("weekdayTimes")); own.Clear(); own.SendKeys("06:00");
+            driver.ExecuteScript("document.getElementById('startTimesToSkip').value='22:00';renderStartTimeScopeOptions();");
+            Assert.Equal("06:00", driver.FindElement(By.Id("weekdayTimes")).GetAttribute("value"));
+            driver.FindElement(By.Id("weekdayTab-Friday")).Click();
+            Assert.Equal("22:00", driver.FindElement(By.Id("weekdayTimes")).GetAttribute("value"));
+            driver.FindElement(By.Id("weekdayUseBase")).Click();
+            driver.FindElement(By.Id("weekdayTimes")).SendKeys(Keys.Control + "a" + Keys.Backspace);
+            Assert.Equal("[]", driver.ExecuteScript("return JSON.stringify(weekdayStartTimesToSkip.Friday)"));
+            driver.ExecuteScript("document.getElementById('startTimesToSkip').value='14:00';renderStartTimeScopeOptions();");
+            Assert.Equal("", driver.FindElement(By.Id("weekdayTimes")).GetAttribute("value"));
+            driver.ExecuteScript("document.getElementById('includedWeekdays').value='Thursday';renderWeekdaySettings();");
+            Assert.Single(driver.FindElements(By.CssSelector("#weekdayTabs button")));
+            Assert.Equal("06:00", driver.FindElement(By.Id("weekdayTimes")).GetAttribute("value"));
+            driver.ExecuteScript("document.getElementById('includedWeekdays').value='Thursday\\nFriday';renderWeekdaySettings();");
+            driver.FindElement(By.Id("weekdayTab-Friday")).Click();
+            Assert.False(driver.FindElement(By.Id("weekdayUseBase")).Selected);
+            Assert.Equal("", driver.FindElement(By.Id("weekdayTimes")).GetAttribute("value"));
+            driver.FindElement(By.Id("weekdayUseBase")).Click();
+            Assert.Equal("14:00", driver.FindElement(By.Id("weekdayTimes")).GetAttribute("value"));
+            Assert.Equal("false", driver.ExecuteScript("return String(Object.hasOwn(weekdayStartTimesToSkip,'Friday'))"));
+            driver.FindElement(By.Id("weekdayTab-Friday")).SendKeys(Keys.ArrowLeft);
+            Assert.Equal("true", driver.FindElement(By.Id("weekdayTab-Thursday")).GetAttribute("aria-selected"));
+            foreach (int width in new[] { 1440, 390 })
+            {
+                driver.Manage().Window.Size = new System.Drawing.Size(width, 900);
+                Assert.True((bool)driver.ExecuteScript("return document.documentElement.scrollWidth <= innerWidth")!);
+            }
+            driver.ExecuteScript("document.getElementById('includedWeekdays').value='Saturday\\nSunday';renderWeekdaySettings();");
+            Assert.Empty(driver.FindElements(By.CssSelector("#weekdayTabs button")));
+            Assert.Empty(driver.FindElements(By.Id("weekdayTimes")));
+            Assert.Equal("06:00", driver.ExecuteScript("return weekdayStartTimesToSkip.Thursday[0]"));
+        }
+        finally
+        {
+            driver.Quit();
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
     private static void AssertValidationFails(
         IJavaScriptExecutor js,
         string script,
