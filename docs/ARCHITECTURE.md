@@ -31,7 +31,7 @@ sequenceDiagram
         Browser-->>Bot: Parsed date, start/end, location, type, registration control
     end
     Bot->>Rules: Read current shared and per-day rules
-    Bot->>Bot: Filter exclusions and lead time; prioritize remaining shifts
+    Bot->>Bot: Filter exclusions and lead time, then prioritize remaining shifts
     Bot->>Browser: Re-open page and locate current control by shift identifier
     Browser->>Portal: Attempt registration
     Portal-->>Browser: Updated availability/listing
