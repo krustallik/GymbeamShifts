@@ -1,295 +1,122 @@
 # GymBeam Shifts Automation
 
-A production-oriented automation and operations platform for monitoring available
-GymBeam work shifts, applying configurable selection rules, registering eligible
-shifts through Selenium, and notifying users through Telegram.
+[![CI](https://github.com/krustallik/GymbeamShifts/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/krustallik/GymbeamShifts/actions/workflows/ci.yml)
 
-The repository contains two applications:
+A C# automation system that monitors a third-party shift portal, filters and prioritizes available shifts, and registers matching shifts through Selenium. It also includes a separate ASP.NET Core manager for operating multiple isolated bot instances.
 
-- **Shift bot** — signs in to the shift portal, scans and prioritizes available
-  shifts, registers matching shifts, and exposes a per-instance administration UI.
-- **Admin Manager** — provisions and manages multiple isolated bot containers,
-  credentials, logs, lifecycle operations, Telegram messages, and HTTPS routes.
+This is an independent project and is not affiliated with or endorsed by GymBeam.
 
-> This is a personal automation project and is not an official GymBeam product.
+## What it does
+
+The repository contains two .NET applications:
+
+- **Shift bot** signs in to the portal with a configured account, scans paginated shift listings, applies date, weekday, holiday, start-time, lead-time, shift-type, and location rules, and attempts to register eligible shifts. It sends status and shift notifications through the Telegram Bot API.
+- **Admin Manager** provides an authenticated dashboard for multiple bot instances. It can inspect health and resource use, view bounded logs, control container lifecycle, update credentials, provision or remove instances, and send Telegram messages.
+
+The bot's configuration UI is served by the bot itself. Each bot has its own configuration, credentials, and runtime data.
 
 ## Screenshots
 
-The screenshot slots below are intentionally reserved for the portfolio version
-of the repository.
+The screenshots below show the real application interfaces running locally with synthetic demonstration settings and status data. They do not show live accounts or production data.
 
-### Admin Manager dashboard
+### Multi-instance operations dashboard
 
-> **Screenshot placeholder** — add `docs/images/admin-manager-dashboard.png`.
+![Admin Manager dashboard with synthetic demo bot statuses](docs/images/admin-manager-dashboard.png)
 
-<!-- Uncomment after adding the image:
-![Admin Manager dashboard](docs/images/admin-manager-dashboard.png)
--->
+### Per-bot shift rules
 
-### Bot configuration
+![Shift bot configuration showing shared rules and per-weekday start-time exclusions](docs/images/bot-configuration.png)
 
-> **Screenshot placeholder** — add `docs/images/bot-configuration.png`.
+## Engineering highlights
 
-<!-- Uncomment after adding the image:
-![Bot configuration](docs/images/bot-configuration.png)
--->
-
-### Bot provisioning and operations
-
-> **Screenshot placeholder** — add `docs/images/bot-provisioning.png`.
-
-<!-- Uncomment after adding the image:
-![Bot provisioning and operations](docs/images/bot-provisioning.png)
--->
+- **Resilient browser workflow:** selects 100 rows per page, scans up to five pages, stores stable shift identifiers rather than relying on stale DOM elements, and rebuilds the listing after a registration changes pagination.
+- **Explicit business rules:** supports overnight shift ranges, inclusive ±30-minute start-time exclusions, independent weekday overrides with inheritance, holiday/weekend rules, lead-time thresholds, and type/location prioritization.
+- **Safe multi-instance management:** validates bot identifiers and provisioning inputs, isolates each instance's files, coordinates lifecycle operations, and uses transaction records with startup recovery for provisioning and credential changes.
+- **Web security controls:** authenticated sessions, CSRF checks, login rate limiting, security headers, PBKDF2 password verification, bounded log responses, and escaped dashboard output.
+- **Recoverable delivery:** GitHub Actions validates the .NET solution and deployment configuration. The SSH deployment script snapshots managed containers and images, checks health, and restores the previous state on failure.
 
 ## Architecture
 
 ```mermaid
-flowchart TB
-    operator[Administrator browser]
-    portal[Shift portal]
-    telegram[Telegram API]
-    github[GitHub Actions]
-
-    subgraph host[Ubuntu deployment host]
-        caddy[Caddy reverse proxy<br/>HTTPS and dynamic routes]
-        manager[Admin Manager<br/>ASP.NET Core]
-        deployer[Deployment and rollback scripts]
-        docker[Docker Engine API]
-        storage[(Persistent registry,<br/>sessions and audit log)]
-        instances[(Per-bot configuration<br/>and runtime data)]
-
-        subgraph bots[Managed bot containers]
-            bot1[Bot instance 1<br/>.NET + Chromium + Selenium]
-            bot2[Bot instance 2<br/>.NET + Chromium + Selenium]
-            botN[Provisioned bot N<br/>.NET + Chromium + Selenium]
-        end
-    end
-
-    operator -->|HTTPS| caddy
-    caddy --> manager
-    caddy --> bot1
-    caddy --> bot2
-    caddy --> botN
-
-    manager --> storage
-    manager -->|Unix socket| docker
-    manager -->|atomic credential updates| instances
-    manager -->|create and remove routes| caddy
-    docker --> bot1
-    docker --> bot2
-    docker --> botN
-    instances --> bot1
-    instances --> bot2
-    instances --> botN
-
-    bot1 -->|browser automation| portal
-    bot2 -->|browser automation| portal
-    botN -->|browser automation| portal
-    bot1 -->|notifications| telegram
-    bot2 -->|notifications| telegram
-    botN -->|notifications| telegram
-    manager -->|manual messages| telegram
-
-    github -->|SSH| deployer
-    deployer --> docker
-    deployer --> caddy
+flowchart LR
+    Operator[Administrator browser] -->|HTTPS| Proxy[Caddy reverse proxy]
+    Proxy --> Manager[Admin Manager<br/>ASP.NET Core]
+    Proxy --> BotUI[Per-bot configuration UI]
+    Manager --> Registry[(JSON registry, sessions<br/>and audit log)]
+    Manager --> Docker[Docker Engine API]
+    Docker --> Bots[Isolated bot containers]
+    Bots --> Bot[Shift bot<br/>C# and Selenium]
+    Bot -->|Chromium automation| Portal[Shift portal]
+    Bot -->|Notifications| Telegram[Telegram Bot API]
+    Manager -->|Operator messages| Telegram
+    Actions[GitHub Actions] -->|SSH deploy| Host[Linux deployment host]
+    Host --> Docker
 ```
 
-### Main runtime flow
+The Admin Manager stores its registry, sessions, and audit events in JSON/JSONL files; the project does not use a relational database. See [Architecture](docs/ARCHITECTURE.md) for component responsibilities and runtime flows.
 
-1. A bot opens Chromium, signs in to the shift portal, and refreshes the shift
-   table at the configured interval.
-2. It selects 100 rows per page, applies sorting, and collects a fresh combined
-   list from pages 1–5, stopping earlier when pagination ends.
-3. Configurable date, time, weekday, holiday, lead-time, and preferred-user rules
-   are applied to the combined list.
-4. Before registration, the bot returns to the recorded page and resolves a fresh
-   DOM element by shift identifier, avoiding stale Selenium references.
-5. After a successful registration, it refreshes the page and rebuilds the full
-   list because all remaining rows may have moved between pages.
-6. Success, availability, startup, status, and error notifications are delivered
-   through Telegram.
+## Technology
 
-## Key features
-
-### Shift automation
-
-- Selenium-based login and browser lifecycle management.
-- Pagination-aware scanning of up to 500 visible shifts per scan.
-- Configurable weekday, holiday, excluded-date, start-time, and minimum lead-time
-  rules.
-- Shift-type and location prioritization with exclusion lists and explicit target-shift monitoring.
-- Detection and persistent skipping of shifts reserved for new workers.
-- Parsing of combined shift-time ranges, including overnight shifts.
-- Start-time exclusions cover an inclusive ±30-minute window, including across midnight, with separate weekend and holiday scope.
-- Allowed weekdays can override only their start-time exclusion list. Missing overrides inherit the current base list; custom lists remain independent when the base changes, and explicit empty lists block no times. Holidays and weekends keep the base rules. Disabled weekday settings are retained for re-enabling.
-- Configurable lunch selection and repeated important-shift notifications.
-- Recovery from stale DOM elements, disconnected WebDriver sessions, and failed
-  login attempts with diagnostic HTML and screenshots.
-
-### Administration and security
-
-- Authenticated dashboard for bot status, logs, lifecycle actions, credentials,
-  and Telegram messages.
-- Signed sessions, CSRF protection, login rate limiting, security headers, and
-  PBKDF2 password verification.
-- Persistent session storage, audit logging, and bounded log responses.
-- Atomic credential updates with startup recovery after interrupted operations.
-- Strict bot identifier, Docker API, path, and provisioning validation.
-
-### Multi-instance operations
-
-- Isolated configuration and runtime storage for every bot.
-- Dynamic bot provisioning, enabling, disabling, and deletion.
-- Docker health checks and coordinated start, stop, and restart operations.
-- Dynamic Caddy routes and automatic HTTPS certificates.
-- Transactional provisioning and administration recovery.
-- Resource limits for Chromium-based bot containers.
-
-### Delivery and quality
-
-- More than 400 unit, integration, security, deployment, and Selenium workflow
-  tests.
-- GitHub Actions restore, build, test, formatting, Docker, deployment-script, and
-  Caddy validation.
-- Docker image deployment over SSH with snapshots, health verification, and
-  rollback support.
-- Release builds currently complete with zero compiler warnings.
-
-## Technology stack
-
-| Area | Technology |
+| Responsibility | Technologies |
 |---|---|
-| Runtime | .NET 8, C# |
-| Admin API/UI | ASP.NET Core minimal APIs, HTML, CSS, JavaScript |
-| Browser automation | Selenium WebDriver, Chromium |
-| Testing | xUnit, Moq, Selenium workflow tests |
-| Containers | Docker Engine, Docker Compose |
-| Reverse proxy | Caddy with automatic HTTPS |
+| Applications | C#, .NET 8, ASP.NET Core minimal APIs |
+| Bot interface | Server-rendered HTML, CSS, and JavaScript |
+| Portal automation | Selenium WebDriver, Chromium |
+| Tests | xUnit, Moq, Selenium workflow tests |
+| Operations | Docker Engine, Docker Compose, Caddy |
 | Notifications | Telegram Bot API |
-| CI/CD | GitHub Actions, SSH deployment |
-| Persistence | JSON/JSONL files with atomic transactions and recovery |
+| Persistence | JSON and JSONL files with atomic writes and recovery |
+| Delivery | GitHub Actions, SSH, health checks, snapshot and rollback scripts |
 
-## Repository structure
+## Build and test
 
-```text
-GymBeamShiftsControllerX/       Shift bot, per-instance admin UI and rules
-GymBeamShiftsControllerX.Tests/ Shift bot unit, integration and Selenium tests
-GymBeam.AdminManager/           Multi-instance management application
-GymBeam.AdminManager.Tests/     Manager unit, security and integration tests
-deploy/examples/                Safe configuration templates
-scripts/                        Deployment, rollback and validation scripts
-.github/workflows/ci.yml        CI and production deployment pipeline
-docker-compose.yml              Bot, Admin Manager and Caddy stack
-DEPLOY.md                       Production deployment and recovery guide
-DOCKER_RUN.md                   Local Docker setup
-```
-
-## Local development
-
-### Prerequisites
-
-- .NET 8 SDK and .NET 9 SDK for the current test projects
-- Chromium or Google Chrome
-- Docker Engine with Docker Compose v2 for containerized execution
-
-### Build and test
+Install the .NET 8 and .NET 9 SDKs. The applications target .NET 8; the shift-bot test project targets .NET 9, while the Admin Manager tests target .NET 8. Selenium workflow tests also need a compatible local Chrome or Chromium installation.
 
 ```bash
+git clone https://github.com/krustallik/GymbeamShifts.git
+cd GymbeamShifts
 dotnet restore GymBeamShiftsController.sln
 dotnet build GymBeamShiftsController.sln --configuration Release --no-restore
 dotnet test GymBeamShiftsController.sln --configuration Release --no-build
 dotnet format GymBeamShiftsController.sln --verify-no-changes --no-restore
 ```
 
-Selenium workflow tests require a compatible local Chrome/Chromium installation.
+The full test suite covers the bot's parsing and eligibility rules, Selenium workflows and administration UI, plus the manager's authentication, persistence, provisioning, lifecycle, and deployment behavior. The latest local portfolio verification ran **501 tests successfully**; see [Development](docs/DEVELOPMENT.md) for the test split and environment notes.
 
-### Run with Docker Compose
+## Running and configuration
 
-Create local runtime files from the safe examples:
+The shift bot requires a portal account and Telegram credentials. The Admin Manager requires its own signing key and password hash, persistent storage paths, and access to the Docker socket for live container operations. Do not use production credentials for local evaluation.
 
-```bash
-mkdir -p instances/bot1/runtime-data instances/bot2/runtime-data
-cp deploy/examples/bot.env.example instances/bot1/.env
-cp deploy/examples/bot.env.example instances/bot2/.env
-cp deploy/examples/appconfig.example.json instances/bot1/appconfig.json
-cp deploy/examples/appconfig.example.json instances/bot2/appconfig.json
+Safe placeholder files are in [`deploy/examples/`](deploy/examples/). The checked-in Compose stack is designed for a Linux host with prepared instance directories and Caddy routing; it binds ports 80 and 443 and can manage Docker containers. Do not start it on a machine with valuable Docker workloads or existing instance data without first preparing a separate host or isolated Docker environment.
+
+- [Local development and tests](docs/DEVELOPMENT.md)
+- [Docker workflow and its prerequisites](DOCKER_RUN.md)
+- [Deployment and recovery runbook](DEPLOY.md)
+- [Architecture and data flows](docs/ARCHITECTURE.md)
+
+## Project status and limitations
+
+- Portal automation depends on the third-party website's DOM and login flow. Website changes can require parser or selector updates.
+- A working bot run requires valid portal and Telegram credentials; the repository does not provide a public demo account.
+- Container provisioning and lifecycle management require a Linux Docker Engine and Caddy admin socket configured for the deployment environment.
+- The included deployment workflow is not a hosted public demo. No public service availability or business-impact metrics are claimed here.
+- Some bot administration and orchestration code remains concentrated in service classes; the existing code is documented as-is rather than refactored for this portfolio pass.
+
+## Repository layout
+
+```text
+GymBeamShiftsControllerX/        Shift bot, parser, rules, and per-bot admin UI
+GymBeamShiftsControllerX.Tests/  Bot unit, integration, and Selenium workflow tests
+GymBeam.AdminManager/            Multi-instance ASP.NET Core manager
+GymBeam.AdminManager.Tests/      Manager security, persistence, and integration tests
+deploy/examples/                 Placeholder-only runtime configuration examples
+scripts/                         Deployment, rollback, and validation scripts
+docs/                            Architecture, development notes, and screenshots
+.github/workflows/ci.yml         CI validation and protected SSH deployment
+DEPLOY.md                        Deployment and recovery runbook
+DOCKER_RUN.md                    Compose-specific operational notes
 ```
 
-Replace every placeholder in the copied files with local credentials. Runtime
-files under `instances/` are ignored by Git and must never be committed.
+## Independent project
 
-Validate and build the stack:
-
-```bash
-docker compose config --quiet
-docker compose build gymbeam-bot-1 gymbeam-admin-manager
-```
-
-The checked-in Caddy configuration uses production hostnames. Do not start Caddy
-locally unless DNS or local host routing has been configured intentionally. See
-[DOCKER_RUN.md](DOCKER_RUN.md) for the complete local container workflow.
-
-## Configuration
-
-Configuration is supplied through per-instance `.env` and `appconfig.json`
-files. The main groups cover:
-
-- shift portal and Telegram credentials;
-- browser mode and window size;
-- polling, lead-time, restart, and notification timing;
-- weekday, holiday, exclusion, shift-type/location priority, and target-shift rules;
-- per-instance administration credentials and session security.
-
-Use only the templates in `deploy/examples/` as a starting point. Never place
-real credentials, Telegram tokens, or signing keys in tracked files.
-
-## CI/CD and deployment
-
-Every push and pull request to `main` runs the full validation pipeline. A push
-to `main` can deploy to the protected `production` GitHub Environment after the
-test job succeeds.
-
-The deployment job connects to the Ubuntu host over SSH, updates the checked-out
-repository with a fast-forward-only pull, and runs `scripts/deploy.sh`. The script
-captures a snapshot, rebuilds the shared bot image, recreates managed containers,
-checks health, and rolls back on failure.
-
-Required GitHub Environment secrets:
-
-| Secret | Purpose |
-|---|---|
-| `SSH_HOST` | Ubuntu deployment host |
-| `SSH_USER` | Deployment user |
-| `SSH_PRIVATE_KEY` | GitHub Actions → Ubuntu SSH key |
-| `DEPLOY_PATH` | Absolute repository path on the host |
-
-The deployment host must independently have read access to the GitHub repository
-because `git fetch origin main` runs on that host. See [DEPLOY.md](DEPLOY.md) for
-server preparation, production operations, backups, and recovery.
-
-## Security notes
-
-- Real instance credentials stay on the deployment server.
-- Secret and runtime paths are excluded by `.gitignore`.
-- Admin Manager runs read-only, drops Linux capabilities, enables
-  `no-new-privileges`, and accesses Docker through a constrained application
-  layer.
-- GitHub Actions dependencies are pinned to commit SHAs.
-- Before publishing a fork, scan the complete Git history for accidentally
-  committed credentials; checking only the current working tree is not enough.
-
-## Current engineering trade-offs
-
-- Browser automation depends on third-party DOM structure and therefore requires
-  explicit waits and workflow regression tests.
-- Some legacy bot administration HTML and orchestration still live in large C#
-  service classes and are candidates for further separation.
-- JSON persistence keeps deployment simple, while atomic transactions and startup
-  recovery protect multi-step administrative operations.
-
-## Further documentation
-
-- [Local Docker workflow](DOCKER_RUN.md)
-- [Production deployment and recovery](DEPLOY.md)
+This repository demonstrates browser automation, rule-driven data processing, secure administration endpoints, container lifecycle management, persistence and recovery, automated testing, and deployment scripting. It is a personal project and is not an official GymBeam service.

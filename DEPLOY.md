@@ -1,191 +1,110 @@
-# CI/CD і розгортання двох ботів
+# Deployment and recovery runbook
 
-## Чинний сервер після перенесення
+This document describes the checked-in deployment workflow. It deliberately contains no deployment IP addresses, private hostnames, or SSH key paths. Set the values for your own environment in the protected GitHub Environment and server-local configuration.
 
-Станом на 22.10.2026 сервер: `169.58.239.149`, репозиторій: `/srv/GymbeamShifts`.
-Адмінка: `https://admin.ihorhub.eu`; боти: `https://bot-ihor.ihorhub.eu` та
-`https://bot-andriana.ihorhub.eu`. На сервері в `.env` задано
-`ADMIN_MANAGER_PUBLIC_HOST=admin.ihorhub.eu`; фінальна HTTPS-перевірка deploy
-читає фактичне значення з контейнера Admin Manager.
+## Deployment layout
 
-Git цього репозиторію на сервері використовує локальну настройку `core.sshCommand`
-з ключем `/root/.ssh/Gymbeam_github_deploy` для читання GitHub.
-Наведена нижче схема `mapa-svietidiel.sk` описує початкове розгортання.
+The Compose deployment includes a shift bot image, the Admin Manager, and Caddy. Each bot runs in an isolated container with a separate `.env`, `appconfig.json`, and `runtime-data/` directory. The manager stores its registry, sessions, and audit log in a Docker volume. Caddy routes HTTPS traffic to the manager and bot administration UIs.
 
-## Цільова схема
+The repository also supports bots provisioned dynamically through the Admin Manager. Deployment scripts identify managed bot containers by the labels `com.gymbeam.managed=true` and `com.gymbeam.role=bot`, rather than relying on fixed container names.
 
-Один Docker-образ запускається у двох ізольованих контейнерах:
+## Host prerequisites
 
-```text
-https://bot1.mapa-svietidiel.sk -> gymbeam-bot-1:8080
-https://bot2.mapa-svietidiel.sk -> gymbeam-bot-2:8080
-```
+- Linux host with Docker Engine and Docker Compose v2.
+- Git checkout of this repository on the deployment host; the host needs read access to the Git remote for `git fetch`.
+- `curl`, `python3`, and `bash` for validation and deployment scripts.
+- DNS and firewall rules for the operator-selected HTTPS hostnames. Expose the reverse proxy on ports 80 and 443; keep the bot and manager application ports private.
+- Adequate memory and disk for the configured number of Chromium-based bots, Docker images, and deployment snapshots.
 
-Кожен бот має власні `.env`, `appconfig.json`, лог, GymBeam-акаунт,
-Telegram-параметри й адміністратора. Caddy автоматично отримує та поновлює
-HTTPS-сертифікати. Додаткова Basic Auth перед адмінкою не використовується.
-Кожен bot-контейнер має ліміт оперативної пам'яті 768 MiB і сумарний
-ліміт RAM + swap 1536 MiB.
+Before deploying, verify that the public hostnames in the server-local environment, Caddy configuration, and generated bot routes agree. The checked-in Compose and Caddy files have defaults for the original setup; they are not a source of truth for a different deployment.
 
-## DNS
+## Server-local files
 
-У Websupport уже налаштовано wildcard A-запис:
-
-```text
-*.mapa-svietidiel.sk -> 84.247.182.209
-```
-
-Тому окремі записи для `bot1` і `bot2` не обов'язкові. Перед запуском перевір:
+Create per-instance files from the placeholder examples only when the destination files do not already exist. Do not overwrite existing credentials or runtime data:
 
 ```bash
-dig +short bot1.mapa-svietidiel.sk
-dig +short bot2.mapa-svietidiel.sk
+mkdir -p instances/bot1/runtime-data instances/bot2/runtime-data
+cp -n deploy/examples/bot.env.example instances/bot1/.env
+cp -n deploy/examples/bot.env.example instances/bot2/.env
+cp -n deploy/examples/appconfig.example.json instances/bot1/appconfig.json
+cp -n deploy/examples/appconfig.example.json instances/bot2/appconfig.json
 ```
 
-Обидві команди мають повернути `84.247.182.209`. Не змінюй наявні записи
-`admin`, `mail`, `webmail`, `smtp`, `pop3`, `imap`.
-
-## Вимоги до сервера
-
-- Ubuntu з Docker Engine, Docker Compose v2, `curl` і `python3`
-- відкриті TCP-порти 22, 80, 443
-- бажано щонайменше 4 GB RAM для двох Chromium-процесів
-- репозиторій уже клонований у каталог із `docker-compose.yml`
+Replace placeholders on the server with each bot's own portal, Telegram, and local administration credentials. Do not copy real values to GitHub Actions or tracked files. Protect the files and directories, for example:
 
 ```bash
-sudo ufw allow 22/tcp
-sudo ufw allow 80/tcp
-sudo ufw allow 443/tcp
-sudo ufw status
-```
-
-Не відкривай порт 8080 назовні.
-
-## Підготовка сервера перед першим push нової схеми
-
-Цей етап виконай до push у `main`, щоб перший автоматичний deploy уже знайшов
-обидва набори конфігурації.
-
-```bash
-cd /шлях/із/секрету/DEPLOY_PATH
-mkdir -p instances/bot1/runtime-data instances/bot2/runtime-data backups
-```
-
-Збережи резервну копію поточного одиночного бота:
-
-```bash
-BACKUP_DIR="$HOME/gymbeam-before-two-bots-$(date -u +%Y%m%dT%H%M%SZ)"
-mkdir -m 700 "$BACKUP_DIR"
-cp GymBeamShiftsControllerX/.env "$BACKUP_DIR/bot1.env"
-cp GymBeamShiftsControllerX/appconfig.json "$BACKUP_DIR/bot1.appconfig.json"
-cp -a runtime-data "$BACKUP_DIR/runtime-data"
-chmod 600 "$BACKUP_DIR/bot1.env" "$BACKUP_DIR/bot1.appconfig.json"
-```
-
-Перенеси чинні налаштування у bot1:
-
-```bash
-cp GymBeamShiftsControllerX/.env instances/bot1/.env
-cp GymBeamShiftsControllerX/appconfig.json instances/bot1/appconfig.json
-```
-
-Підготуй bot2 на основі тих самих файлів:
-
-```bash
-cp GymBeamShiftsControllerX/.env instances/bot2/.env
-cp GymBeamShiftsControllerX/appconfig.json instances/bot2/appconfig.json
-nano instances/bot2/.env
-```
-
-У `instances/bot2/.env` заміни всі значення другого бота. Обов'язкові поля:
-
-```dotenv
-GYMBEAM_AUTH_LOGIN=
-GYMBEAM_AUTH_PASSWORD=
-GYMBEAM_TELEGRAM_BOT_TOKEN=
-GYMBEAM_TELEGRAM_CHAT_ID=
-GYMBEAM_ADMIN_USER=
-GYMBEAM_ADMIN_PASSWORD=
-GYMBEAM_ADMIN_TOKEN_SECRET=
-GYMBEAM_ADMIN_PORT=8080
-GYMBEAM_ADMIN_HOST=*
-```
-
-Створи новий секрет сесії для bot2:
-
-```bash
-openssl rand -hex 32
-```
-
-Bot1 і bot2 повинні мати різні `GYMBEAM_ADMIN_TOKEN_SECRET`. За потреби також
-онови секрет bot1 новим випадковим значенням.
-
-Захисти файли:
-
-```bash
+chmod 700 instances/bot1 instances/bot2
 chmod 600 instances/bot1/.env instances/bot1/appconfig.json
 chmod 600 instances/bot2/.env instances/bot2/appconfig.json
 ```
 
-Якщо чинний `appconfig.json` змінювався через веб і Git показує його як modified,
-після копіювання в `instances/bot1` поверни лише tracked-копію:
+The Admin Manager container runs as UID/GID `1654` and updates credential files atomically. On a Linux host, make the instance directories writable only by that account while keeping the files private:
 
 ```bash
-git restore GymBeamShiftsControllerX/appconfig.json
+sudo chown -R 1654:1654 instances
+sudo find instances -type d -exec chmod 700 {} \;
+sudo find instances -type f \( -name .env -o -name appconfig.json \) -exec chmod 600 {} \;
 ```
 
-Реальний bot1-конфіг уже збережений у `instances/bot1/appconfig.json`.
+### Moving an existing bot into instance storage
 
-## GitHub Actions
+1. Identify the current bot's bind-mount source directories. Review only mount paths; avoid printing the full container environment because it can contain credentials.
+2. Back up its `.env`, `appconfig.json`, and runtime data to an access-controlled location outside the Git checkout.
+3. Copy the bot's files into one server-local `instances/<id>/` directory without overwriting an existing instance. Keep the saved backup until the new container passes health checks.
+4. If adding another bot, prepare a separate credential set and separate runtime directory for it. Do not reuse accounts or session-signing secrets unintentionally.
+5. Confirm the manager can access and update the instance directory, and that each bot's bind mounts point to its own directory.
 
-Workflow `.github/workflows/ci.yml` виконує:
+The existing-bot importer recognizes the preconfigured `bot1` and `bot2` directories only when both `.env` and `appconfig.json` exist. Bots provisioned from the dashboard are registered through the manager instead.
 
-1. restore, build і всі .NET-тести;
-2. підготовку безпечних тимчасових deployment-файлів;
-3. `docker compose config --quiet`;
-4. збірку Docker-образу;
-5. валідацію Caddyfile;
-6. SSH deploy після push у `main`.
+The Admin Manager requires its own settings through environment variables, including:
 
-У GitHub Environment `production` потрібні секрети:
+- `ADMIN_MANAGER_ADMIN_USERNAME`
+- `ADMIN_MANAGER_ADMIN_PASSWORD_HASH` (PBKDF2-SHA256 format)
+- `ADMIN_MANAGER_SESSION_SIGNING_KEY`
+- `ADMIN_MANAGER_PUBLIC_HOST`
+- `ADMIN_MANAGER_PROVISIONING_DOCKER_INSTANCES_PATH`
 
-| Secret | Значення |
+The Compose file also validates additional storage, Docker, and Caddy paths. Set them to absolute paths that match the host's directory layout. Set `DOCKER_SOCKET_GID` to the Docker socket's group ID when needed. Do not reuse a production secret in a development environment.
+
+## GitHub Actions configuration
+
+The protected GitHub Environment named `production` is used by the deploy job. Configure these environment secrets:
+
+| Secret | Purpose |
 |---|---|
-| `SSH_HOST` | `84.247.182.209` |
-| `SSH_USER` | користувач Ubuntu для deploy |
-| `SSH_PRIVATE_KEY` | приватний SSH-ключ GitHub Actions |
-| `DEPLOY_PATH` | каталог репозиторію на сервері |
+| `SSH_HOST` | Deployment host address |
+| `SSH_USER` | SSH account used by the workflow |
+| `SSH_PRIVATE_KEY` | Private key corresponding to a server-authorized public key |
+| `DEPLOY_PATH` | Absolute path to the repository checkout on the host |
 
-Секрети ботів у GitHub додавати не потрібно: вони залишаються тільки на сервері.
+The workflow runs only for a push to `main` after the validation job passes. The deployment job fetches and fast-forward pulls `main`, then runs `scripts/deploy.sh` with the previous commit recorded for snapshot and rollback.
 
-## Що робить deploy-скрипт
+## What CI validates
 
-`scripts/deploy.sh`:
+The `test` job in `.github/workflows/ci.yml`:
 
-1. отримує `main` через fast-forward pull;
-2. перевіряє Docker Compose, Caddy та безпечність runtime-каталогів;
-3. створює timestamped snapshot конфігурації, маршрутів, образів і `docker inspect` усіх managed-ботів;
-4. перевіряє Compose;
-5. один раз збирає спільний образ;
-6. знаходить усі bot-контейнери за labels `com.gymbeam.managed=true` і `com.gymbeam.role=bot`;
-7. пересоздає кожен знайдений контейнер зі свіжим `gymbeam-shifts-bot:latest`, зберігаючи labels, environment, bind mounts, network, healthcheck, restart policy та попередній running/stopped стан, а ліміт RAM нормалізує до 768 MiB;
-8. для кожного запущеного бота чекає стану `healthy` і перевіряє `/healthz` безпосередньо всередині контейнера;
-9. запускає Caddy;
-10. лише після повного успіху видаляє тимчасові backup-контейнери; при помилці повертає попередні контейнери та image.
+1. Restores and builds the .NET solution using .NET 8 and .NET 9.
+2. Runs unit, integration, security, deployment, and full test passes.
+3. Verifies formatting.
+4. Creates temporary deployment fixtures from the safe examples.
+5. Validates Compose and deployment shell/Python scripts.
+6. Builds the bot and Admin Manager images.
+7. Runs the managed-bot deployment fixture and validates the Caddy configuration.
 
-Імена ботів не зашиті в deploy-скрипт. Це однаково працює для Compose-сервісів і ботів, створених через Admin Manager, наприклад `bot-ihor` або `bot-andriana`.
+## Deployment and automatic rollback
 
-## Оновлення ліміту RAM на вже створених ботах
+On the deployment host, `scripts/deploy.sh`:
 
-Після push у `main` GitHub Actions запускає `scripts/deploy.sh`. Deploy знаходить
-усі контейнери з labels `com.gymbeam.managed=true` і `com.gymbeam.role=bot`,
-створює безпечний snapshot, а потім пересоздає їх із лімітом 768 MiB RAM і
-1536 MiB RAM + swap. Це
-стосується як `gymbeam-bot-1` і `gymbeam-bot-2`, так і ботів, створених через
-Admin Manager. Простого `docker restart` недостатньо, оскільки він не змінює
-HostConfig контейнера.
+1. Validates the current/previous commit and runtime directory boundaries.
+2. Creates a timestamped directory under `runtime/deployments/` containing the prior Compose file, Caddy configuration and routes, relevant images, and snapshots of managed containers.
+3. Validates Compose and Caddy configuration, then builds the bot and manager images.
+4. Recreates managed bot containers from the new image while preserving their managed settings and running/stopped state.
+5. Starts and health-checks the manager, reloads Caddy, and checks the configured public manager `/healthz` endpoint.
+6. Removes temporary rollback resources only after the deployment succeeds.
 
-Після успішного deploy перевір ліміти на сервері:
+An error invokes `scripts/rollback.sh` for that deployment snapshot. Runtime instance files remain server-local and are not replaced by a Git checkout. Maintain a separate backup policy for instance credentials and user data; deployment snapshots are for release recovery, not a substitute for off-host backups.
+
+The Compose bot services set a 768 MiB memory limit and a 1536 MiB combined memory-plus-swap limit, with a 256 MiB shared-memory area. The deployment payload also normalizes the memory and memory-plus-swap limits of managed bot containers to those values. To inspect the resulting container limits after deployment:
 
 ```bash
 docker ps -aq \
@@ -195,96 +114,42 @@ docker ps -aq \
       --format '{{.Name}} RAM={{.HostConfig.Memory}} RAM+SWAP={{.HostConfig.MemorySwap}}'
 ```
 
-Для кожного бота очікується `RAM=805306368 RAM+SWAP=1610612736`. Якщо автоматичний workflow не
-запускався, виконай той самий безпечний deploy вручну:
+Expected values are `RAM=805306368` and `RAM+SWAP=1610612736` for each managed bot.
 
-```bash
-cd /шлях/із/секрету/DEPLOY_PATH
-bash scripts/deploy.sh
-```
+## Manual health checks
 
-Для термінової зміни одного контейнера без повного deploy можна використати:
-
-```bash
-docker update --memory 768m --memory-swap 1536m ІМ'Я_КОНТЕЙНЕРА
-```
-
-Наступний штатний deploy однаково закріпить для нього 768 MiB.
-
-## Перший запуск
-
-Після підготовки server-local файлів зроби push у `main` і стеж за GitHub
-Actions. Також deploy можна перевірити вручну:
-
-```bash
-cd /шлях/із/секрету/DEPLOY_PATH
-bash scripts/deploy.sh
-```
-
-Перевір контейнери:
+On the host:
 
 ```bash
 docker compose ps
-docker compose logs --tail=100 gymbeam-bot-1
-docker compose logs --tail=100 gymbeam-bot-2
+docker compose logs --tail=100 gymbeam-admin-manager
 docker compose logs --tail=100 caddy
+curl -fsS "https://${ADMIN_MANAGER_PUBLIC_HOST}/healthz"
 ```
 
-Перевір HTTPS:
+For each bot, check its container health and internal endpoint:
 
 ```bash
-curl -fsS https://bot1.mapa-svietidiel.sk/healthz
-curl -fsS https://bot2.mapa-svietidiel.sk/healthz
+docker ps --filter label=com.gymbeam.managed=true --filter label=com.gymbeam.role=bot
+docker exec CONTAINER_NAME curl --fail --silent http://127.0.0.1:8080/healthz
 ```
 
-Очікувана відповідь:
+The health response should be `{"status":"ok"}`. Then sign in through the configured HTTPS hostnames and verify that each instance shows its own settings.
 
-```json
-{"status":"ok"}
-```
+## Manual rollback
 
-Після цього відкрий:
-
-- `https://bot1.mapa-svietidiel.sk`
-- `https://bot2.mapa-svietidiel.sk`
-
-Перевір, що кожен логін працює лише у своїй адмінці, налаштування різні, а
-повідомлення надходять у правильні Telegram-чати.
-
-## Щоденна експлуатація
-
-Логи:
+List available snapshots and choose the release to restore:
 
 ```bash
-tail -f instances/bot1/runtime-data/app.log
-tail -f instances/bot2/runtime-data/app.log
+ls -1 runtime/deployments
+bash scripts/rollback.sh "runtime/deployments/SNAPSHOT_ID"
 ```
 
-Перезапуск одного бота:
+The script validates that the selected snapshot is inside `runtime/deployments/`, restores the captured Compose/Caddy state and images, and recreates the managed containers. Review the command and selected snapshot ID before running it; do not use a path outside the deployment snapshot directory.
 
-```bash
-docker compose restart gymbeam-bot-1
-docker compose restart gymbeam-bot-2
-```
+## Operational notes
 
-Стан ресурсів:
-
-```bash
-docker stats
-free -h
-df -h
-```
-
-Налаштування, змінені через кожну вебадмінку, записуються у відповідний
-`instances/botN/appconfig.json` і не перезаписуються наступним deploy.
-
-## Відновлення конфігурації
-
-Переглянь резервні копії:
-
-```bash
-ls -la backups
-```
-
-Перед відновленням зупини потрібний контейнер, скопіюй його `.env` і JSON із
-обраного backup та запусти контейнер знову.
+- The manager requires access to the Docker socket; treat its host role as privileged even though the container drops Linux capabilities and runs with a read-only root filesystem.
+- Do not publish container port 8080 directly to the internet. Route traffic through the configured HTTPS reverse proxy.
+- Do not run the Compose stack on a workstation with valuable Docker workloads or existing `instances/` data. It can start containers, bind ports 80/443, and manage Docker resources.
+- Keep GitHub SSH credentials in the protected `production` environment. Keep portal, Telegram, and bot UI credentials in each server-local instance directory.

@@ -1,30 +1,46 @@
-# Local Docker run
+# Docker Compose environment
 
-The Compose stack contains two bot instances and Caddy:
+The checked-in `docker-compose.yml` describes a Linux operations deployment, not an isolated developer demo. It starts two Selenium bot containers, the Admin Manager, and Caddy. Caddy binds host ports 80 and 443; the manager has access to the Docker socket and the configured instance directories.
 
-- `gymbeam-bot-1` uses `instances/bot1/`
-- `gymbeam-bot-2` uses `instances/bot2/`
-- Caddy publishes ports 80 and 443
+Do not run this stack on a machine with valuable Docker workloads, real local instance data, or another service using ports 80/443. Use a disposable Linux host or dedicated isolated Docker environment. Do not point it at a production Docker socket.
 
-Initialize missing local runtime files from `deploy/examples/`, then provide valid
-credentials in both `.env` files:
+## Requirements
 
-```bash
-mkdir -p instances/bot1/runtime-data instances/bot2/runtime-data
-cp deploy/examples/bot.env.example instances/bot1/.env
-cp deploy/examples/bot.env.example instances/bot2/.env
-cp deploy/examples/appconfig.example.json instances/bot1/appconfig.json
-cp deploy/examples/appconfig.example.json instances/bot2/appconfig.json
-```
+- Linux with Docker Engine and Docker Compose v2.
+- Prepared `instances/bot1/` and `instances/bot2/` directories.
+- Placeholder-derived `.env` and `appconfig.json` files with local credentials.
+- Admin Manager environment variables and a Caddy configuration whose hostnames match the test environment.
+- Ports 80 and 443 available, or a separately prepared Compose override for isolated ports.
 
-Validate and build:
+See [Deployment and recovery](DEPLOY.md) for required server settings and secrets. `deploy/examples/` contains safe placeholders. Never copy real credentials into tracked files.
+
+## Validate and build without starting containers
+
+After preparing all required environment variables and directories, validate the configuration and build only:
 
 ```bash
 docker compose config --quiet
-docker compose build gymbeam-bot-1
+docker compose build gymbeam-bot-1 gymbeam-admin-manager
 ```
 
-The production hostnames in `Caddyfile` resolve to the production server, so do
-not start Caddy locally unless DNS or local hosts routing is intentionally set up.
+These commands do not start the services. CI performs this validation using temporary example files.
 
-Runtime files under `instances/` are ignored by Git.
+## Start and stop a prepared isolated environment
+
+Only after confirming the target Docker daemon, bind mounts, and host ports are isolated:
+
+```bash
+docker compose up -d
+docker compose ps
+docker compose logs --tail=100 gymbeam-admin-manager caddy
+```
+
+To stop the stack:
+
+```bash
+docker compose down
+```
+
+`docker compose down` stops and removes the Compose containers and network, but named volumes persist. Do not use `docker compose down --volumes` unless intentionally discarding the Admin Manager's registry/session data and Caddy state in that disposable environment.
+
+For the safe local code and test workflow, see [Development and verification](docs/DEVELOPMENT.md); it does not require launching this stack.
