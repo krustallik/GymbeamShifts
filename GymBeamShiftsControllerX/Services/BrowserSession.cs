@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using GymBeamShiftsControllerX.Models;
 using OpenQA.Selenium;
@@ -13,7 +14,11 @@ namespace GymBeamShiftsControllerX.Services
     {
         private const int MaximumDiagnosticSets = 20;
         private static readonly TimeSpan DiagnosticRetention = TimeSpan.FromDays(14);
+        private static readonly TimeSpan InitialCookieBannerWait = TimeSpan.FromSeconds(60);
+        private static readonly TimeSpan SubsequentCookieBannerWait = TimeSpan.FromSeconds(5);
+        private static readonly TimeSpan CookieBannerPollingInterval = TimeSpan.FromMilliseconds(200);
         private readonly AppConfig _config;
+        private IWebDriver? _cookieBannerDriver;
         private readonly int _remoteDebuggingPort;
 
         public ChromeDriver Driver { get; private set; } = null!;
@@ -122,20 +127,45 @@ namespace GymBeamShiftsControllerX.Services
                 });
         }
 
-        private void DismissCookieBanner()
+        internal void DismissCookieBanner()
         {
-            try
+            var driver = Driver;
+            TimeSpan timeout = GetCookieBannerWaitTimeout(driver);
+            Logger.Log($"Ожидаем cookie-баннер до {timeout.TotalSeconds:0} сек.");
+            var elapsed = Stopwatch.StartNew();
+            while (elapsed.Elapsed < timeout)
             {
-                var cookieWait = new WebDriverWait(Driver, TimeSpan.FromSeconds(5));
-                IWebElement button = cookieWait.Until(
-                    ExpectedConditions.ElementToBeClickable(By.Id(AppConstants.CookiesEssentialButtonId)));
-                button.Click();
-                Logger.Log("Cookie-баннер закрыт.");
+                try
+                {
+                    IWebElement button = driver.FindElement(By.Id(AppConstants.CookiesEssentialButtonId));
+                    if (button.Displayed && button.Enabled)
+                    {
+                        button.Click();
+                        Logger.Log("Cookie-баннер закрыт.");
+                        return;
+                    }
+                }
+                catch (Exception ex) when (ex is NoSuchElementException or StaleElementReferenceException
+                    or ElementNotInteractableException)
+                {
+                    // The consent dialog can appear or finish rendering between polls.
+                }
+
+                TimeSpan remaining = timeout - elapsed.Elapsed;
+                if (remaining > TimeSpan.Zero)
+                    Thread.Sleep(remaining < CookieBannerPollingInterval ? remaining : CookieBannerPollingInterval);
             }
-            catch (WebDriverTimeoutException)
-            {
-                Logger.Log("Cookie-баннер не показан.");
-            }
+
+            Logger.Log("Cookie-баннер не показан или недоступен.");
+        }
+
+        internal TimeSpan GetCookieBannerWaitTimeout(IWebDriver driver)
+        {
+            if (ReferenceEquals(_cookieBannerDriver, driver))
+                return SubsequentCookieBannerWait;
+
+            _cookieBannerDriver = driver;
+            return InitialCookieBannerWait;
         }
 
         private void SaveDiagnostics(Exception exception)
@@ -201,6 +231,7 @@ namespace GymBeamShiftsControllerX.Services
             finally
             {
                 Driver = null!;
+                _cookieBannerDriver = null;
             }
         }
     }

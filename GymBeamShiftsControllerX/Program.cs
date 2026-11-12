@@ -12,6 +12,9 @@ namespace GymBeamShiftsControllerX
         private static int iterationCount = 0;
         private static long totalIterationCount = 0;
         private static long lastErrorNotificationIteration = -30;
+        private static readonly object notificationStatusLock = new();
+        private static bool dailyStatusPending;
+        private static bool errorNotificationPending;
         private static DateTime lastDailyStatusDate = DateTime.MinValue.Date;
         private static DateTime lastIterationAt = DateTime.MinValue;
         private static DateTime lastSuccessAt = DateTime.MinValue;
@@ -21,7 +24,7 @@ namespace GymBeamShiftsControllerX
         private const int ErrorNotificationIntervalIterations = 30;
         private static readonly TimeSpan DailyStatusTime = new TimeSpan(10, 30, 0);
 
-        static void Main(string[] args)
+        static async Task Main(string[] args)
         {
             AppConfig config;
             var startTime = UserTime.Now;
@@ -39,12 +42,23 @@ namespace GymBeamShiftsControllerX
 
             var browserSession = new BrowserSession(config);
             var shiftRulesStore = new ShiftRulesStore(config.ShiftRules);
-            var shiftChecker = new ShiftChecker(browserSession, config, shiftRulesStore);
+            string runtimeDirectory = Path.GetDirectoryName(Path.GetFullPath(Logger.GetLogFilePath()))!;
+            await using var telegram = new TelegramNotificationQueue(
+                config.Telegram, Path.Combine(runtimeDirectory, "telegram-outbox.sqlite3"));
+            long browserRecipientVersion = 0;
+            var shiftChecker = new ShiftChecker(
+                browserSession, config, shiftRulesStore,
+                message => _ = telegram.Enqueue(message, browserRecipientVersion),
+                (message, important) => telegram.EnqueueConfirmation(message, important, config.Timing, browserRecipientVersion));
             var adminWeb = new AdminWebServer(
                 config,
                 shiftRulesStore,
                 () => CreateStatusSnapshot(startTime, config),
-                credentialsUpdated: () => Interlocked.Exchange(ref credentialsReloadRequested, 1));
+                credentialsUpdated: () =>
+                {
+                    telegram.UpdateRecipient(config.Telegram);
+                    Interlocked.Exchange(ref credentialsReloadRequested, 1);
+                });
             try
             {
                 adminWeb.Start();
@@ -57,18 +71,18 @@ namespace GymBeamShiftsControllerX
 
             while (!ConfigurationLoader.HasOperationalCredentials(config))
             {
-                Thread.Sleep(TimeSpan.FromSeconds(1));
+                await Task.Delay(TimeSpan.FromSeconds(1));
             }
 
-            InitializeBrowserWithRetry(browserSession, config);
-            SendStartupNotification(config, startTime);
+            browserRecipientVersion = InitializeBrowserWithRetry(browserSession, telegram);
+            _ = SendStartupNotification(telegram, startTime);
 
             while (true)
             {
                 if (Interlocked.Exchange(ref credentialsReloadRequested, 0) == 1)
                 {
                     try { browserSession.Quit(); } catch { }
-                    InitializeBrowserWithRetry(browserSession, config);
+                    browserRecipientVersion = InitializeBrowserWithRetry(browserSession, telegram);
                 }
 
                 try
@@ -87,19 +101,19 @@ namespace GymBeamShiftsControllerX
                     Logger.Log($"WebDriver упал, перезапуск: {ex.Message}");
                     lastErrorAt = UserTime.Now;
                     lastErrorMessage = ex.Message;
-                    TrySendErrorNotification(config, ex, "WebDriver crash");
+                    _ = TrySendErrorNotification(telegram);
                     try { browserSession.Quit(); } catch { }
-                    InitializeBrowserWithRetry(browserSession, config);
+                    browserRecipientVersion = InitializeBrowserWithRetry(browserSession, telegram);
                 }
                 catch (Exception ex)
                 {
                     Logger.Log($"Произошла ошибка: {ex.Message}");
                     lastErrorAt = UserTime.Now;
                     lastErrorMessage = ex.Message;
-                    TrySendErrorNotification(config, ex, "Runtime error");
+                    _ = TrySendErrorNotification(telegram);
                 }
 
-                TrySendDailyStatus(config, startTime);
+                _ = TrySendDailyStatus(telegram, startTime);
 
                 if (iterationCount >= config.Timing.DriverRestartAfterIterations)
                 {
@@ -112,29 +126,30 @@ namespace GymBeamShiftsControllerX
                     {
                     }
 
-                    InitializeBrowserWithRetry(browserSession, config);
+                    browserRecipientVersion = InitializeBrowserWithRetry(browserSession, telegram);
                     iterationCount = 0;
                 }
 
-                Thread.Sleep(config.Timing.CheckIntervalMinutes * 60 * 1000);
+                await Task.Delay(config.Timing.CheckIntervalMinutes * 60 * 1000);
             }
         }
 
-        private static void InitializeBrowserWithRetry(BrowserSession browserSession, AppConfig config)
+        private static long InitializeBrowserWithRetry(BrowserSession browserSession, TelegramNotificationQueue telegram)
         {
             while (true)
             {
                 try
                 {
+                    long recipientVersion = telegram.RecipientVersion;
                     browserSession.InitializeDriver();
-                    return;
+                    return recipientVersion;
                 }
                 catch (Exception ex)
                 {
                     lastErrorAt = UserTime.Now;
                     lastErrorMessage = ex.Message;
                     Logger.Log($"Не удалось инициализировать браузер. Повтор через 30 секунд: {ex.Message}");
-                    TrySendErrorNotification(config, ex, "Browser initialization error");
+                    _ = TrySendErrorNotification(telegram);
 
                     try
                     {
@@ -172,39 +187,39 @@ namespace GymBeamShiftsControllerX
             return $"{uptime.Days}d {uptime.Hours}h {uptime.Minutes}m";
         }
 
-        private static void SendStartupNotification(AppConfig config, DateTime startTime)
+        private static Task SendStartupNotification(TelegramNotificationQueue telegram, DateTime startTime)
         {
             string message =
                 "✅ Бот успішно запущено!\n\n" +
                 "Усі налаштування завантажено. Бот уже перевіряє доступні зміни та повідомить вас, коли знайде відповідний варіант.\n\n" +
                 $"Початок роботи: {startTime:dd.MM.yyyy о HH:mm}";
 
-            if (TrySendTelegram(config, message))
-            {
-                Logger.Log("Отправлено стартовое сообщение в Telegram.");
-            }
+            return telegram.Enqueue(message);
         }
 
-        private static void TrySendDailyStatus(AppConfig config, DateTime startTime)
+        private static Task TrySendDailyStatus(TelegramNotificationQueue telegram, DateTime startTime)
         {
-            var now = UserTime.Now;
-            if (!ShouldSendDailyStatus(now, lastDailyStatusDate))
+            lock (notificationStatusLock)
             {
-                return;
-            }
+                var now = UserTime.Now;
+                if (dailyStatusPending || !ShouldSendDailyStatus(now, lastDailyStatusDate))
+                    return Task.CompletedTask;
 
-            var uptime = now - startTime;
-            string message =
-                "🟢 Бот працює нормально\n\n" +
-                "Це щоденне підтвердження, що бот активний і продовжує шукати зміни.\n\n" +
-                $"Працює без перерви: {uptime.Days} дн. {uptime.Hours} год. {uptime.Minutes} хв.\n" +
-                $"Виконано перевірок: {totalIterationCount}\n" +
-                $"Станом на: {now:dd.MM.yyyy HH:mm}";
+                var uptime = now - startTime;
+                string message =
+                    "🟢 Бот працює нормально\n\n" +
+                    "Це щоденне підтвердження, що бот активний і продовжує шукати зміни.\n\n" +
+                    $"Працює без перерви: {uptime.Days} дн. {uptime.Hours} год. {uptime.Minutes} хв.\n" +
+                    $"Виконано перевірок: {totalIterationCount}\n" +
+                    $"Станом на: {now:dd.MM.yyyy HH:mm}";
 
-            if (TrySendTelegram(config, message))
-            {
-                lastDailyStatusDate = now.Date;
-                Logger.Log("Отправлен ежедневный статус в Telegram.");
+                dailyStatusPending = true;
+                return TrackDeliveryAsync(telegram.Enqueue(message), sent =>
+                {
+                    dailyStatusPending = false;
+                    if (sent)
+                        lastDailyStatusDate = now.Date;
+                });
             }
         }
 
@@ -213,22 +228,26 @@ namespace GymBeamShiftsControllerX
             return now.TimeOfDay >= DailyStatusTime && lastSentDate != now.Date;
         }
 
-        private static void TrySendErrorNotification(AppConfig config, Exception ex, string category)
+        private static Task TrySendErrorNotification(TelegramNotificationQueue telegram)
         {
-            if (!ShouldSendErrorNotification(totalIterationCount, lastErrorNotificationIteration))
+            lock (notificationStatusLock)
             {
-                return;
-            }
+                long iteration = totalIterationCount;
+                if (errorNotificationPending || !ShouldSendErrorNotification(iteration, lastErrorNotificationIteration))
+                    return Task.CompletedTask;
 
-            string message =
-                "⚠️ Боту не вдалося виконати перевірку\n\n" +
-                "Бот автоматично спробує продовжити роботу. Якщо такі повідомлення повторюються, відкрийте панель і перевірте налаштування GymBeam.\n\n" +
-                $"Час: {UserTime.Now:dd.MM.yyyy HH:mm}";
+                string message =
+                    "⚠️ Боту не вдалося виконати перевірку\n\n" +
+                    "Бот автоматично спробує продовжити роботу. Якщо такі повідомлення повторюються, відкрийте панель і перевірте налаштування GymBeam.\n\n" +
+                    $"Час: {UserTime.Now:dd.MM.yyyy HH:mm}";
 
-            if (TrySendTelegram(config, message))
-            {
-                lastErrorNotificationIteration = totalIterationCount;
-                Logger.Log("Отправлено уведомление об ошибке в Telegram.");
+                errorNotificationPending = true;
+                return TrackDeliveryAsync(telegram.Enqueue(message), sent =>
+                {
+                    errorNotificationPending = false;
+                    if (sent)
+                        lastErrorNotificationIteration = iteration;
+                });
             }
         }
 
@@ -237,17 +256,12 @@ namespace GymBeamShiftsControllerX
             return totalIterations - lastNotificationIteration >= ErrorNotificationIntervalIterations;
         }
 
-        private static bool TrySendTelegram(AppConfig config, string message)
+        private static async Task TrackDeliveryAsync(Task<bool> delivery, Action<bool> complete)
         {
-            try
+            bool sent = await delivery;
+            lock (notificationStatusLock)
             {
-                TelegramService.SendMessage(config.Telegram.BotToken, config.Telegram.ChatId, message);
-                return true;
-            }
-            catch (Exception telegramEx)
-            {
-                Logger.Log($"Не удалось отправить Telegram-сообщение: {telegramEx.Message}");
-                return false;
+                complete(sent);
             }
         }
     }

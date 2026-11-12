@@ -319,20 +319,51 @@ public sealed class ShiftCheckerWorkflowTests : IDisposable
     }
 
     [Fact]
-    public void CheckForShifts_SendsUkrainianSuccessfulShiftMessage()
+    public void CheckForShifts_ClosesCookieOverlayBeforeClickingTheTable()
+    {
+        string rows = CreateShiftRow(GetFutureSaturday(), "23:00", "Cookie Overlay User");
+        string scenario = CreateScenarioHtml(rows).Replace(
+            "<button id='cookies-consent-essential' onclick='this.remove()'>Accept cookies</button>",
+            """
+            <script>
+              if (!sessionStorage.getItem('cookieAccepted')) {
+                const overlay = document.createElement('div');
+                overlay.id = 'cookie-overlay';
+                overlay.style.cssText = 'position:fixed;inset:0;z-index:9999;background:white';
+                document.body.append(overlay);
+                setTimeout(() => {
+                  overlay.innerHTML = '<button id="cookies-consent-essential">Accept cookies</button>';
+                  overlay.firstChild.onclick = () => {
+                    sessionStorage.setItem('cookieAccepted', 'true');
+                    overlay.remove();
+                  };
+                }, 6500);
+              }
+            </script>
+            """);
+        NavigateToScenario(scenario);
+
+        CreateChecker(takeLunch: false).CheckForShifts();
+
+        Assert.Empty(_driver.FindElements(By.Id("cookie-overlay")));
+        Assert.Equal("#completed-lunch_no-Cookie%20Overlay%20User", new Uri(_driver.Url).Fragment);
+    }
+
+    [Fact]
+    public async Task CheckForShifts_SendsUkrainianSuccessfulShiftMessage()
     {
         DateTime shiftDate = GetFutureSaturday();
         string rows = CreateShiftRow(shiftDate, "23:00", "Successful User");
-        var messages = new List<string>();
+        var messageReceived = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
         NavigateToScenario(CreateScenarioHtml(rows));
         var checker = CreateChecker(
             takeLunch: false,
             importantShiftNotificationCount: 1,
-            sendTelegramMessage: messages.Add);
+            sendTelegramMessage: message => messageReceived.TrySetResult(message));
 
         checker.CheckForShifts();
 
-        string message = Assert.Single(messages);
+        string message = await messageReceived.Task.WaitAsync(TimeSpan.FromSeconds(5));
         Assert.Contains("Зміну знайдено та успішно обрано", message);
         Assert.Contains($"Дата: {shiftDate:dd.MM.yyyy}", message);
         Assert.Contains("Час: 23:00-23:30", message);
@@ -509,7 +540,12 @@ public sealed class ShiftCheckerWorkflowTests : IDisposable
             browserSession,
             config,
             new ShiftRulesStore(config.ShiftRules),
-            sendTelegramMessage);
+            sendTelegramMessage ?? (_ => { }),
+            (message, important) =>
+            {
+                if (!important || importantShiftNotificationCount > 0)
+                    sendTelegramMessage?.Invoke(message);
+            });
     }
 
     private void NavigateToScenario(string html)

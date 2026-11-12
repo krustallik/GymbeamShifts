@@ -9,6 +9,12 @@ namespace GymBeamShiftsControllerX.Services
 
         public static void SendMessage(string botToken, string chatId, string message)
         {
+            SendMessageAsync(botToken, chatId, message, CancellationToken.None).GetAwaiter().GetResult();
+        }
+
+        internal static async Task SendMessageAsync(
+            string botToken, string chatId, string message, CancellationToken cancellationToken)
+        {
             string url = $"https://api.telegram.org/bot{botToken}/sendMessage";
 
             var data = new Dictionary<string, string>
@@ -19,7 +25,7 @@ namespace GymBeamShiftsControllerX.Services
 
             using (var content = new FormUrlEncodedContent(data))
             {
-                using var result = HttpClient.PostAsync(url, content).Result;
+                using var result = await HttpClient.PostAsync(url, content, cancellationToken).ConfigureAwait(false);
                 EnsureSuccessfulResponse(result);
                 Logger.Log($"Telegram message sent. Status: {result.StatusCode}");
             }

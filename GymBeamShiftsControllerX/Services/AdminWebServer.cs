@@ -492,8 +492,7 @@ namespace GymBeamShiftsControllerX.Services
                 ConfigurationLoader.SaveUserCredentials(_configFileName, login, password, telegramToken, chatId);
                 _config.Auth.Login = login;
                 _config.Auth.Password = password;
-                _config.Telegram.BotToken = telegramToken;
-                _config.Telegram.ChatId = chatId;
+                _config.Telegram = new TelegramSettings { BotToken = telegramToken, ChatId = chatId };
                 Logger.Log("User-managed credentials updated from bot admin UI.");
                 _credentialsUpdated();
                 WriteJson(context.Response, 200, new

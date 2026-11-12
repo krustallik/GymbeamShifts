@@ -93,7 +93,8 @@ public class ShiftCheckerHelperTests
             new BrowserSession(config),
             config,
             new ShiftRulesStore(config.ShiftRules),
-            messages.Add);
+            messages.Add,
+            (_, _) => { });
         var method = ReflectionTestHelper.GetInstanceMethod(
             typeof(ShiftChecker),
             "NotifyAboutUnavailableTargetShifts");
@@ -142,7 +143,8 @@ public class ShiftCheckerHelperTests
             new BrowserSession(config),
             config,
             new ShiftRulesStore(config.ShiftRules),
-            messages.Add);
+            messages.Add,
+            (_, _) => { });
         var method = ReflectionTestHelper.GetInstanceMethod(
             typeof(ShiftChecker),
             "NotifyAboutUnavailableTargetShifts");

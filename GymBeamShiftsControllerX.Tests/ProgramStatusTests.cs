@@ -123,120 +123,76 @@ public class ProgramStatusTests
     }
 
     [Fact]
-    public void TrySendTelegram_CompletesWithoutThrowing_ForInvalidToken()
-    {
-        ResetProgramState();
-        var method = ReflectionTestHelper.GetStaticMethod(typeof(Program), "TrySendTelegram");
-        var cfg = new AppConfig
-        {
-            Telegram = new TelegramSettings { BotToken = string.Empty, ChatId = string.Empty }
-        };
-
-        var exception = Record.Exception(() => method.Invoke(null, new object[] { cfg, "hello" }));
-        Assert.Null(exception);
-    }
-
-    [Fact]
-    public void TrySendTelegram_ReturnsFalse_WhenUrlCannotBeCreated()
-    {
-        ResetProgramState();
-        var method = ReflectionTestHelper.GetStaticMethod(typeof(Program), "TrySendTelegram");
-        var cfg = new AppConfig
-        {
-            Telegram = new TelegramSettings { BotToken = new string('x', 70000), ChatId = "chat" }
-        };
-
-        var result = (bool)method.Invoke(null, new object[] { cfg, "hello" })!;
-
-        Assert.False(result);
-    }
-
-    [Fact]
-    public void TrySendDailyStatus_DoesNothingWhenAlreadySentToday()
+    public async Task TrySendDailyStatus_DoesNothingWhenAlreadySentToday()
     {
         ResetProgramState();
         ReflectionTestHelper.SetStaticField(typeof(Program), "lastDailyStatusDate", UserTime.Now.Date);
         var method = ReflectionTestHelper.GetStaticMethod(typeof(Program), "TrySendDailyStatus");
 
-        method.Invoke(null, new object[] { new AppConfig(), UserTime.Now.AddHours(-1) });
+        await (Task)method.Invoke(null, new object?[] { null, UserTime.Now.AddHours(-1) })!;
 
         Assert.Equal(UserTime.Now.Date, ReflectionTestHelper.GetStaticField(typeof(Program), "lastDailyStatusDate"));
     }
 
     [Fact]
-    public void TrySendErrorNotification_DoesNothingInsideThrottleWindow()
+    public async Task TrySendErrorNotification_DoesNothingInsideThrottleWindow()
     {
         ResetProgramState();
         ReflectionTestHelper.SetStaticField(typeof(Program), "totalIterationCount", 10L);
         ReflectionTestHelper.SetStaticField(typeof(Program), "lastErrorNotificationIteration", 0L);
         var method = ReflectionTestHelper.GetStaticMethod(typeof(Program), "TrySendErrorNotification");
 
-        method.Invoke(null, new object[] { new AppConfig(), new Exception("ignored"), "test" });
+        await (Task)method.Invoke(null, new object?[] { null })!;
 
         Assert.Equal(0L, ReflectionTestHelper.GetStaticField(typeof(Program), "lastErrorNotificationIteration"));
     }
 
-    [Fact]
-    public void SendStartupNotification_HandlesTelegramFailureWithoutThrowing()
-    {
-        ResetProgramState();
-        string? previousHost = Environment.GetEnvironmentVariable("HOSTNAME");
-        string? previousContainer = Environment.GetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER");
-        string? previousPort = Environment.GetEnvironmentVariable("GYMBEAM_ADMIN_PORT");
-        var method = ReflectionTestHelper.GetStaticMethod(typeof(Program), "SendStartupNotification");
-        var cfg = CreateConfigWithInvalidTelegramUrl();
-
-        try
-        {
-            Environment.SetEnvironmentVariable("HOSTNAME", "unit-test-host");
-            Environment.SetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER", "true");
-            Environment.SetEnvironmentVariable("GYMBEAM_ADMIN_PORT", "9123");
-
-            var exception = Record.Exception(() =>
-                method.Invoke(null, new object[] { cfg, new DateTime(2026, 8, 10, 8, 30, 0) }));
-
-            Assert.Null(exception);
-        }
-        finally
-        {
-            Environment.SetEnvironmentVariable("HOSTNAME", previousHost);
-            Environment.SetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER", previousContainer);
-            Environment.SetEnvironmentVariable("GYMBEAM_ADMIN_PORT", previousPort);
-        }
-    }
-
-    [Fact]
-    public void TrySendErrorNotification_KeepsThrottleMarkerWhenTelegramFails()
+    [Theory]
+    [InlineData(false, 0L)]
+    [InlineData(true, 30L)]
+    public async Task TrySendErrorNotification_MarksOnlySuccessfulDelivery(bool succeeds, long expectedMarker)
     {
         ResetProgramState();
         ReflectionTestHelper.SetStaticField(typeof(Program), "totalIterationCount", 30L);
         ReflectionTestHelper.SetStaticField(typeof(Program), "lastErrorNotificationIteration", 0L);
         var method = ReflectionTestHelper.GetStaticMethod(typeof(Program), "TrySendErrorNotification");
+        string path = Path.Combine(Path.GetTempPath(), $"gymbeam-program-{Guid.NewGuid():N}.sqlite3");
+        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        int attempts = 0;
 
-        method.Invoke(null, new object[]
+        try
         {
-            CreateConfigWithInvalidTelegramUrl(),
-            new Exception("expected failure"),
-            "unit test"
-        });
+            await using var queue = new TelegramNotificationQueue(
+                new TelegramSettings { BotToken = "test-token", ChatId = "test-chat" }, path,
+                async (_, _, _, cancellation) =>
+                {
+                    Interlocked.Increment(ref attempts);
+                    started.TrySetResult();
+                    await release.Task.WaitAsync(cancellation);
+                    if (!succeeds)
+                        throw new HttpRequestException("test");
+                });
+            var delivery = (Task)method.Invoke(null, new object[] { queue })!;
+            await started.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            Assert.Equal(0L, ReflectionTestHelper.GetStaticField(typeof(Program), "lastErrorNotificationIteration"));
+            await (Task)method.Invoke(null, new object[] { queue })!;
+            release.TrySetResult();
+            await delivery.WaitAsync(TimeSpan.FromSeconds(5));
 
-        Assert.Equal(0L, ReflectionTestHelper.GetStaticField(typeof(Program), "lastErrorNotificationIteration"));
-    }
-
-    private static AppConfig CreateConfigWithInvalidTelegramUrl()
-    {
-        return new AppConfig
+            Assert.Equal(expectedMarker, ReflectionTestHelper.GetStaticField(typeof(Program), "lastErrorNotificationIteration"));
+            Assert.Equal(1, attempts);
+        }
+        finally
         {
-            Telegram = new TelegramSettings
-            {
-                BotToken = new string('x', 70000),
-                ChatId = "chat"
-            }
-        };
+            File.Delete(path);
+        }
     }
 
     private static void ResetProgramState()
     {
+        ReflectionTestHelper.SetStaticField(typeof(Program), "dailyStatusPending", false);
+        ReflectionTestHelper.SetStaticField(typeof(Program), "errorNotificationPending", false);
         ReflectionTestHelper.SetStaticField(typeof(Program), "lastIterationAt", DateTime.MinValue);
         ReflectionTestHelper.SetStaticField(typeof(Program), "lastSuccessAt", DateTime.MinValue);
         ReflectionTestHelper.SetStaticField(typeof(Program), "lastErrorAt", DateTime.MinValue);

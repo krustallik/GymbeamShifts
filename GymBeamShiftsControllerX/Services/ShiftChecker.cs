@@ -14,23 +14,22 @@ namespace GymBeamShiftsControllerX.Services
         private readonly BrowserSession _browserSession;
         private readonly AppConfig _config;
         private readonly ShiftRulesStore _shiftRulesStore;
-        private readonly Action<string> _sendTelegramMessage;
+        private readonly Action<string> _queueNotification;
+        private readonly Action<string, bool> _queueConfirmation;
         private readonly HashSet<string> _skippedNewWorkerShiftIds = new(StringComparer.Ordinal);
 
         public ShiftChecker(
             BrowserSession browserSession,
             AppConfig config,
             ShiftRulesStore shiftRulesStore,
-            Action<string>? sendTelegramMessage = null)
+            Action<string> queueNotification,
+            Action<string, bool> queueConfirmation)
         {
             _browserSession = browserSession;
             _config = config;
             _shiftRulesStore = shiftRulesStore;
-            _sendTelegramMessage = sendTelegramMessage
-                ?? (message => TelegramService.SendMessage(
-                    _config.Telegram.BotToken,
-                    _config.Telegram.ChatId,
-                    message));
+            _queueNotification = queueNotification;
+            _queueConfirmation = queueConfirmation;
         }
 
         public void CheckForShifts()
@@ -44,6 +43,7 @@ namespace GymBeamShiftsControllerX.Services
 
                 driver.Navigate().Refresh();
                 Logger.Log("Страница обновлена.");
+                _browserSession.DismissCookieBanner();
 
                 SelectAllShiftsPerPage(wait);
 
@@ -59,25 +59,6 @@ namespace GymBeamShiftsControllerX.Services
                     return tableRows.Count > 0;
                 });
                 Logger.Log("Таблица смен обновлена и содержит записи.");
-
-                try
-                {
-                    Logger.Log("Ожидаем кнопку 'Only allow essential cookies' для закрытия cookie-баннера.");
-                    var allowEssentialCookiesButton = wait.Until(
-                        ExpectedConditions.ElementToBeClickable(By.Id(AppConstants.CookiesEssentialButtonId))
-                    );
-                    Logger.Log("Нажимаем кнопку 'Only allow essential cookies'.");
-                    allowEssentialCookiesButton.Click();
-                    Logger.Log("Кнопка 'Only allow essential cookies' нажата.");
-                }
-                catch (WebDriverTimeoutException)
-                {
-                    Logger.Log("Cookie-баннер не найден (timeout). Пропускаем...");
-                }
-                catch (NoSuchElementException)
-                {
-                    Logger.Log("Cookie-баннер не найден. Пропускаем...");
-                }
 
                 var shiftList = CollectShiftsAcrossPages(driver, wait);
 
@@ -181,7 +162,6 @@ namespace GymBeamShiftsControllerX.Services
 
                             WaitForSubscribeModalToClose(wait);
                             Logger.Log("Модальное окно закрыто.");
-                            SelectAllShiftsPerPage(wait);
                             subscriptionConfirmed = true;
                         }
                         catch (NoSuchElementException ex)
@@ -201,7 +181,8 @@ namespace GymBeamShiftsControllerX.Services
                             return;
                         }
 
-                        SendShiftNotifications(message, isWeekendOrHoliday);
+                        _queueConfirmation(message, isWeekendOrHoliday);
+                        SelectAllShiftsPerPage(wait);
                         shiftRegistered = true;
                         break;
                     }
@@ -659,9 +640,9 @@ namespace GymBeamShiftsControllerX.Services
                     continue;
                 }
 
-                _sendTelegramMessage(BuildUnavailableTargetShiftMessage(shift));
+                _queueNotification(BuildUnavailableTargetShiftMessage(shift));
                 Logger.Log(
-                    $"Відправлено повідомлення про вибрану зміну без кнопки Prihlásiť: "
+                    $"Додано в чергу повідомлення про вибрану зміну без кнопки Prihlásiť: "
                     + $"{shift.Date:dd.MM.yyyy} {shift.TimeFrom}-{shift.TimeTo}.");
                 notificationCount++;
             }
@@ -690,29 +671,6 @@ namespace GymBeamShiftsControllerX.Services
                 $"Час: {shift.TimeFrom}-{shift.TimeTo}\n" +
                 $"Місце: {shift.Location}\n" +
                 $"Тип зміни: {shift.ShiftType}";
-        }
-
-        private void SendShiftNotifications(string message, bool isWeekendOrHoliday)
-        {
-            int notificationCount = isWeekendOrHoliday
-                ? _config.Timing.ImportantShiftNotificationCount
-                : 1;
-
-            for (int notificationNumber = 1; notificationNumber <= notificationCount; notificationNumber++)
-            {
-                _sendTelegramMessage(message);
-                Logger.Log($"Сообщение {notificationNumber}/{notificationCount} отправлено в Telegram.");
-
-                if (notificationNumber < notificationCount)
-                {
-                    Thread.Sleep(_config.Timing.ImportantShiftNotificationDelayMilliseconds);
-                }
-            }
-
-            if (!isWeekendOrHoliday)
-            {
-                Thread.Sleep(_config.Timing.TelegramDelayMilliseconds);
-            }
         }
 
         private static HashSet<DateTime> ParseDateSet(List<string> dates)

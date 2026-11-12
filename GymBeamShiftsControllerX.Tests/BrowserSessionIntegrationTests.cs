@@ -89,6 +89,52 @@ public sealed class BrowserSessionIntegrationTests
     }
 
     [Fact]
+    public void InitializeDriver_WaitsForDelayedConsentBeforeSubmittingLogin()
+    {
+        string directory = Directory.CreateTempSubdirectory("gymbeam-cookie-login-").FullName;
+        string pagePath = Path.Combine(directory, "login.html");
+        File.WriteAllText(pagePath, """
+            <!doctype html><html><body>
+              <form onsubmit="location.hash = 'signed-in'; return false">
+                <input id="login"><input id="password" type="password"><button type="submit">Sign in</button>
+              </form>
+              <div id="overlay" style="position:fixed;inset:0;background:white"></div>
+              <script>
+                setTimeout(() => {
+                  const overlay = document.getElementById('overlay');
+                  overlay.innerHTML = '<button id="cookies-consent-essential">Accept</button>';
+                  overlay.firstChild.onclick = () => overlay.remove();
+                }, 6500);
+              </script>
+            </body></html>
+            """);
+
+        var session = new BrowserSession(new AppConfig
+        {
+            Auth = new AuthSettings
+            {
+                LoginUrl = new Uri(pagePath).AbsoluteUri,
+                SuccessUrlContains = "#signed-in",
+                Login = "local-test-login",
+                Password = "local-test-password"
+            }
+        }, remoteDebuggingPort: 0);
+
+        try
+        {
+            session.InitializeDriver();
+            Assert.EndsWith("#signed-in", session.Driver.Url);
+            Assert.Empty(session.Driver.FindElements(By.Id("overlay")));
+            Assert.Equal(TimeSpan.FromSeconds(5), session.GetCookieBannerWaitTimeout(session.Driver));
+        }
+        finally
+        {
+            session.Quit();
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [Fact]
     public void Quit_BeforeInitialization_DoesNotThrow()
     {
         var session = new BrowserSession(new AppConfig());
